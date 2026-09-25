@@ -17,7 +17,9 @@ COPY whatsapp-bridge/ ./
 RUN go build -trimpath -o /out/whatsapp-bridge .
 
 # --- Web panel: static export. The API base is /api because nginx serves the panel and the bridge on one origin. ---
-FROM node:20-alpine AS web-builder
+# Runs on the build machine's own architecture: the output is static files, identical for every platform, and
+# next build (Turbopack) crashes under QEMU emulation.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS web-builder
 WORKDIR /app
 COPY whatsapp-web-ui/package*.json ./
 RUN npm ci
@@ -27,13 +29,13 @@ RUN npm run build
 
 # --- MCP server dependencies in an isolated venv (build tools stay out of the final image) ---
 FROM python:3.13-slim-bookworm AS mcp-builder
-RUN pip install --no-cache-dir uv
 WORKDIR /app
 COPY whatsapp-mcp-server/requirements.txt .
-# gradio/gradio_client are only used by gradio-main.py (local dev UI), not by main.py
+# gradio/gradio_client are only used by gradio-main.py (local dev UI), not by main.py.
+# pip rather than uv: uv crashes under QEMU, which multi-arch builds on an arm64 machine need for amd64.
 RUN grep -vE "^gradio" requirements.txt > requirements-docker.txt \
-    && uv venv /opt/venv \
-    && uv pip install --python /opt/venv --no-cache -r requirements-docker.txt
+    && python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements-docker.txt
 
 # --- Runtime ---
 FROM python:3.13-slim-bookworm AS runtime
