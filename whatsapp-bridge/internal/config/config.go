@@ -34,6 +34,11 @@ type Config struct {
 	// Safety gate: comma-separated list of allowed JIDs/phone numbers (WHATSAPP_ALLOWLIST_JIDS)
 	// If set, outgoing message sends to JIDs/numbers outside this allowlist are rejected.
 	AllowlistJIDs []string
+
+	// Web UI login (server-side sessions). Both must be set to enable login.
+	WebUIUsername   string        // WEB_UI_USERNAME
+	WebUIPassword   string        // WEB_UI_PASSWORD
+	WebUISessionTTL time.Duration // WEB_UI_SESSION_TTL (default 24h, sliding expiry)
 }
 
 // NewConfig creates a new configuration with default values
@@ -52,6 +57,16 @@ func NewConfig() *Config {
 		PresenceMode:      "human",
 		PresenceLingerMin: 8 * time.Second,
 		PresenceLingerMax: 15 * time.Second,
+		// Web UI session default
+		WebUISessionTTL: 24 * time.Hour,
+	}
+
+	cfg.WebUIUsername = os.Getenv("WEB_UI_USERNAME")
+	cfg.WebUIPassword = os.Getenv("WEB_UI_PASSWORD")
+	if ttl := os.Getenv("WEB_UI_SESSION_TTL"); ttl != "" {
+		if d, err := time.ParseDuration(ttl); err == nil && d > 0 {
+			cfg.WebUISessionTTL = d
+		}
 	}
 
 	// Override with environment variables if set
