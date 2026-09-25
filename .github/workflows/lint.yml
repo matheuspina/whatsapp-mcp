@@ -53,13 +53,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Lint Dockerfiles
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile.bridge
           failure-threshold: error
 
       - name: Lint MCP Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile.mcp
           failure-threshold: error
