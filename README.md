@@ -88,6 +88,7 @@ server of this project. (Text the assistant reads through a tool does reach your
 - **Media.** Download images, video, audio and documents, with images returned inline to the assistant.
 - **Webhooks.** Forward incoming messages to HTTP endpoints, with triggers, matching rules, HMAC signatures and retries.
 - **Web panel.** Sign in, pair a device with a phone code, watch sync status, see and end active sessions, manage webhooks.
+- **Local search index (in progress).** A background service builds a keyword-searchable index (SQLite FTS5) of your message history, entirely on your machine, as the foundation for local hybrid search. Not yet exposed as an MCP tool. See [docs/search.md](docs/search.md).
 - **A tool surface you control.** 27 tools in 10 toolsets; expose only what your assistant needs.
 - **Secure by default.** Ports on `127.0.0.1` only, API key and login required, HttpOnly session cookies, CSRF and brute-force protection.
 - **Docker first.** One command starts everything; state lives in a single `store/` folder.
@@ -118,7 +119,9 @@ flowchart LR
         MCP["whatsapp-mcp<br/>Python, FastMCP<br/>:8081/mcp"]
         UI["web-ui<br/>Next.js static, nginx<br/>:8090"]
         Bridge["whatsapp-bridge<br/>Go, whatsmeow<br/>:8180"]
+        Indexer["indexer<br/>Python, background<br/>no ports"]
         Store[("store/<br/>messages.db<br/>whatsapp.db")]
+        IndexDB[("store-index/<br/>index.db")]
     end
 
     WA(["WhatsApp<br/>servers"])
@@ -130,15 +133,18 @@ flowchart LR
     MCP -- "read-only queries" --> Store
     Bridge <--> Store
     Bridge <-- "multi-device protocol" --> WA
+    Indexer -- "read-only" --> Store
+    Indexer -- "writes" --> IndexDB
 ```
 
 | Component | Stack | Role |
 |-----------|-------|------|
 | [`whatsapp-bridge`](whatsapp-bridge) | Go, [whatsmeow](https://github.com/tulir/whatsmeow), SQLite | Talks to WhatsApp, stores messages, REST API, webhooks, panel sessions |
 | [`whatsapp-mcp-server`](whatsapp-mcp-server) | Python, FastMCP | MCP tools for your AI client |
+| [`whatsapp-mcp-server/search`](whatsapp-mcp-server/search) | Python, background service | Keyword search index (`store-index/index.db`); read-only against `store/`. Phase 1 of local hybrid search |
 | [`whatsapp-web-ui`](whatsapp-web-ui) | Next.js, Tailwind, shadcn/ui | Web panel |
 
-More in [docs/architecture.md](docs/architecture.md).
+More in [docs/architecture.md](docs/architecture.md) and [docs/search.md](docs/search.md).
 
 ## Quick start
 
@@ -345,6 +351,7 @@ The full reference, with every variable and the ports, is in [docs/configuration
 ```bash
 docker compose up -d --build     # start, or rebuild after changes
 docker compose logs -f whatsapp-bridge
+docker compose logs -f indexer   # search index build/backfill progress
 docker compose down              # stop (your data stays in ./store)
 make status                      # connection state
 make reconnect                   # reconnect without pairing again
@@ -438,7 +445,8 @@ Details, code style and how to add a tool are in [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Roadmap
 
-Next up: authentication for the MCP endpoint, local hybrid search (exact terms plus meaning, entirely on your machine), and persistent panel sessions.
+Local hybrid search is underway: the background indexer and keyword search (FTS5) are in place ([docs/search.md](docs/search.md)); local embeddings and MCP search tools are next.
+Also next up: authentication for the MCP endpoint and persistent panel sessions.
 See [ROADMAP.md](ROADMAP.md) and the [changelog](CHANGELOG.md).
 
 ## Contributing
