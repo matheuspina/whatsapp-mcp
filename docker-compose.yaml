@@ -23,6 +23,10 @@ services:
       - API_KEY=${API_KEY:?API_KEY is required - see .env.example}
       - DISABLE_AUTH_CHECK=${DISABLE_AUTH_CHECK:-false}
       - API_BIND_HOST=0.0.0.0  # Docker: accept from internal network; external port is already bound to 127.0.0.1:8180
+      # Web UI login — server-side sessions, HttpOnly cookie
+      - WEB_UI_USERNAME=${WEB_UI_USERNAME:?WEB_UI_USERNAME is required - see .env.example}
+      - WEB_UI_PASSWORD=${WEB_UI_PASSWORD:?WEB_UI_PASSWORD is required - see .env.example}
+      - WEB_UI_SESSION_TTL=${WEB_UI_SESSION_TTL:-24h}
       # History sync — only takes effect at QR pairing time, see docs/history-sync.md
       - HISTORY_SYNC_DAYS_LIMIT=${HISTORY_SYNC_DAYS_LIMIT:-365}
       - HISTORY_SYNC_SIZE_MB=${HISTORY_SYNC_SIZE_MB:-5000}

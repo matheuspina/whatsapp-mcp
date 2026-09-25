@@ -39,9 +39,63 @@ func getAllowedOrigins() map[string]bool {
 	return origins
 }
 
-// AuthMiddleware validates API key authentication using constant-time comparison
-func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+// sessionCookieName is the HttpOnly cookie that carries the web UI session token.
+const sessionCookieName = "wa_session"
+
+// sessionToken returns the web UI session token from the session cookie.
+func sessionToken(r *http.Request) string {
+	if c, err := r.Cookie(sessionCookieName); err == nil {
+		return c.Value
+	}
+	return ""
+}
+
+// isSafeMethod reports whether the method cannot change state.
+func isSafeMethod(m string) bool {
+	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
+}
+
+// originAllowed reports whether the request's Origin is on the CORS allowlist.
+func originAllowed(r *http.Request) bool {
+	return getAllowedOrigins()[r.Header.Get("Origin")]
+}
+
+// clientIP returns the caller address used for audit logs. It honours
+// X-Forwarded-For, so it must not be used for security decisions.
+func clientIP(r *http.Request) string {
+	ip := r.RemoteAddr
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		ip = strings.Split(forwarded, ",")[0]
+	}
+	return ip
+}
+
+// authMiddleware authorizes a request with either a valid web UI session
+// cookie or the shared API key (X-API-Key, used by the MCP server and
+// scripts). Key comparison is constant-time.
+//
+// Cookies are sent by the browser automatically, so a session-authenticated
+// request that changes state must also come from an allowlisted Origin
+// (CSRF defence on top of SameSite=Strict).
+func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ip := clientIP(r)
+
+		if s.sessions != nil {
+			if token := sessionToken(r); token != "" {
+				if _, ok := s.sessions.Validate(token); ok {
+					if !isSafeMethod(r.Method) && !originAllowed(r) {
+						security.LogAuthFailure(ip, r.Header.Get("User-Agent"), "Session request from disallowed Origin")
+						SendJSONError(w, "Forbidden", http.StatusForbidden)
+						return
+					}
+					security.LogAuthSuccess(ip, r.URL.Path)
+					next(w, r)
+					return
+				}
+			}
+		}
+
 		expectedKey := os.Getenv("API_KEY")
 
 		// Skip auth if no API_KEY is configured (dev mode)
@@ -50,17 +104,10 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Get client IP
-		ip := r.RemoteAddr
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			ip = strings.Split(forwarded, ",")[0]
-		}
-
-		// Check X-API-Key header using constant-time comparison to prevent timing attacks
 		apiKey := r.Header.Get("X-API-Key")
 		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(expectedKey)) != 1 {
-			security.LogAuthFailure(ip, r.Header.Get("User-Agent"), "Invalid API key")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			security.LogAuthFailure(ip, r.Header.Get("User-Agent"), "Invalid API key or session")
+			SendJSONError(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -151,6 +198,12 @@ func SecurityHeadersMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // SecureMiddleware chains security headers, auth, rate limiting, and CORS middleware
-func SecureMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return SecurityHeadersMiddleware(CorsMiddleware(RateLimitMiddleware(AuthMiddleware(next))))
+func (s *Server) SecureMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return SecurityHeadersMiddleware(CorsMiddleware(RateLimitMiddleware(s.authMiddleware(next))))
+}
+
+// PublicMiddleware is SecureMiddleware without authentication, for endpoints
+// that must be reachable before login (the login endpoint itself).
+func (s *Server) PublicMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return SecurityHeadersMiddleware(CorsMiddleware(RateLimitMiddleware(next)))
 }

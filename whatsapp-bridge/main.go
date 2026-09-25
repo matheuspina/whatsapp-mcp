@@ -14,6 +14,7 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"whatsapp-bridge/internal/antiban"
 	"whatsapp-bridge/internal/api"
+	"whatsapp-bridge/internal/auth"
 	"whatsapp-bridge/internal/config"
 	"whatsapp-bridge/internal/database"
 	localTypes "whatsapp-bridge/internal/types"
@@ -426,7 +427,16 @@ func main() {
 	}
 
 	// Start REST API server with webhook support (BEFORE connecting to avoid blocking)
-	server := api.NewServer(client, messageStore, webhookManager, cfg.APIPort, cfg.APIBindHost)
+	var sessions *auth.Manager
+	if cfg.WebUIUsername != "" && cfg.WebUIPassword != "" {
+		sessions = auth.NewManager(cfg.WebUISessionTTL)
+		sessions.StartCleanup(time.Minute)
+		defer sessions.Stop()
+		logger.Infof("Web UI login enabled for user %q (session TTL %v)", cfg.WebUIUsername, cfg.WebUISessionTTL)
+	} else {
+		logger.Warnf("Web UI login disabled: set WEB_UI_USERNAME and WEB_UI_PASSWORD to enable it")
+	}
+	server := api.NewServer(client, messageStore, webhookManager, cfg.APIPort, cfg.APIBindHost, sessions, cfg.WebUIUsername, cfg.WebUIPassword)
 	server.Start()
 	fmt.Println("✓ REST API server started on port " + fmt.Sprintf("%d", cfg.APIPort))
 
@@ -446,7 +456,8 @@ func main() {
 	fmt.Println("REST server is running. Press Ctrl+C to disconnect and exit.")
 	fmt.Println("=" + fmt.Sprintf("%150s", ""))
 	fmt.Println("Monitor sync progress:")
-	fmt.Println("  curl -H 'X-API-Key: " + apiKey + "' http://localhost:" + fmt.Sprintf("%d", cfg.APIPort) + "/api/sync-status")
+	// Never print the key itself: container logs are routinely copied around.
+	fmt.Println("  curl -H \"X-API-Key: $API_KEY\" http://localhost:" + fmt.Sprintf("%d", cfg.APIPort) + "/api/sync-status")
 	fmt.Println("=" + fmt.Sprintf("%150s", ""))
 
 	// Periodically log sync stats
