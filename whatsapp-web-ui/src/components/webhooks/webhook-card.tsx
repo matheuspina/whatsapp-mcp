@@ -38,15 +38,15 @@ export function WebhookCard({ webhook, onTest, onLogs, onEdit, onToggle, onDelet
   return (
     <Card className="relative">
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
             <h3 className="font-semibold leading-none">{webhook.name}</h3>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <ExternalLink className="h-3 w-3" />
-              <span className="truncate max-w-[200px]">{webhook.webhook_url}</span>
+            <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+              <ExternalLink className="h-3 w-3 shrink-0" />
+              <span className="truncate">{webhook.webhook_url}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Badge variant={webhook.enabled ? "default" : "secondary"}>
               {webhook.enabled ? "Enabled" : "Disabled"}
             </Badge>
