@@ -23,6 +23,10 @@ services:
       - API_KEY=${API_KEY:?API_KEY is required - see .env.example}
       - DISABLE_AUTH_CHECK=${DISABLE_AUTH_CHECK:-false}
       - API_BIND_HOST=0.0.0.0  # Docker: accept from internal network; external port is already bound to 127.0.0.1:8180
+      # History sync — only takes effect at QR pairing time, see docs/history-sync.md
+      - HISTORY_SYNC_DAYS_LIMIT=${HISTORY_SYNC_DAYS_LIMIT:-365}
+      - HISTORY_SYNC_SIZE_MB=${HISTORY_SYNC_SIZE_MB:-5000}
+      - STORAGE_QUOTA_MB=${STORAGE_QUOTA_MB:-10240}
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/api/health"]
       interval: 60s
