@@ -91,18 +91,20 @@ export function ActiveSessions() {
 
   return (
     <Card>
-      <CardHeader className="flex-row items-start justify-between space-y-0">
-        <div className="space-y-1.5">
-          <CardTitle>Active sessions</CardTitle>
-          <CardDescription>
-            Everyone currently signed in to this panel. Sessions are kept on the server, so this list is the
-            same from any browser.
-          </CardDescription>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1.5">
+            <CardTitle>Active sessions</CardTitle>
+            <CardDescription>
+              Everyone currently signed in to this panel. Sessions are kept on the server, so this list is the
+              same from any browser.
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={load} disabled={loading}>
+            <RefreshCw className={"mr-2 h-4 w-4 " + (loading ? "animate-spin" : "")} />
+            Refresh
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={"mr-2 h-4 w-4 " + (loading ? "animate-spin" : "")} />
-          Refresh
-        </Button>
       </CardHeader>
       <CardContent className="space-y-3">
         {sessions === null && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
