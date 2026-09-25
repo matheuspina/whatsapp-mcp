@@ -18,3 +18,4 @@ wheels/
 # IDE
 .vscode/
 .idea/
+.coverage
