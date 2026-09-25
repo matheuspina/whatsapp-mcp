@@ -24,6 +24,7 @@ Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 
 ### Security
 - The bridge no longer prints `API_KEY` in its startup banner.
+- The bridge refuses to start when `API_KEY` or `WEB_UI_PASSWORD` still have the `CHANGEME...` example value from `.env.example`.
 
 ### Removed
 - Files specific to previous maintainers: a hard-coded launcher script, funding configuration, a fork-monitoring workflow, generated Windows scheduler scripts, development reports and an example screenshot.

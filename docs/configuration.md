@@ -15,6 +15,7 @@ receives the variables listed in the compose file.
 | `WEB_UI_PASSWORD` | Password for the web panel login. Use a strong one (`openssl rand -base64 18`). |
 
 The bridge will not start without `API_KEY` unless `DISABLE_AUTH_CHECK=true` (development only).
+It also refuses to start while `API_KEY` or `WEB_UI_PASSWORD` still hold the `CHANGEME...` example value from `.env.example`, so the public placeholder can never become your real credential.
 
 ## Web panel
 
