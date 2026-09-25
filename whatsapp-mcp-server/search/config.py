@@ -23,6 +23,22 @@ CHUNK_MAX_MESSAGES = _int_env("CHUNK_MAX_MESSAGES", 15)
 CHUNK_MAX_CHARS = _int_env("CHUNK_MAX_CHARS", 1500)
 CHUNK_OVERLAP = _int_env("CHUNK_OVERLAP", 2)
 
+# Embeddings are computed locally. "none" turns the semantic side off and keeps keyword search only.
+EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "fastembed").strip().lower()
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-small")
+EMBED_BATCH_SIZE = _int_env("EMBED_BATCH_SIZE", 32)
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
+EMBEDDING_CACHE_DIR = os.getenv("EMBEDDING_CACHE_DIR") or None
+
+# Candidates taken from each retrieval path before rank fusion.
+SEARCH_K_FTS = _int_env("SEARCH_K_FTS", 50)
+SEARCH_K_VEC = _int_env("SEARCH_K_VEC", 50)
+# Semantic matches below this cosine similarity are dropped (0 keeps everything the model returns).
+SEARCH_MIN_SIMILARITY = float(os.getenv("SEARCH_MIN_SIMILARITY") or 0.0)
+
+# Timezone used to read date filters and to print dates in search results.
+DISPLAY_TZ = os.getenv("DISPLAY_TZ", "America/Bahia")
+
 
 def resolve_messages_db_path() -> str:
     """Path to the bridge's messages.db, from the shared store resolution."""

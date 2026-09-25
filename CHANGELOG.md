@@ -8,6 +8,13 @@ All notable changes to this project are recorded here. The format follows
 Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 
 ### Added
+- Local hybrid search (Phases 2 and 3): the indexer now embeds every chunk with a local model
+  (`intfloat/multilingual-e5-small` through fastembed, stored with sqlite-vec) and the MCP server has a new
+  `search` toolset with `search_messages` (keyword, semantic or hybrid, fused with reciprocal rank fusion, filtered by
+  chat, sender and dates in `America/Bahia`) and `index_status`. Switching `EMBEDDING_MODEL` or the backend rebuilds
+  the vectors. `EMBEDDING_BACKEND=none` keeps keyword search only. New variables: `EMBEDDING_BACKEND`,
+  `EMBEDDING_MODEL`, `EMBEDDING_CACHE_DIR`, `EMBED_BATCH_SIZE`, `OLLAMA_URL`, `SEARCH_K_FTS`, `SEARCH_K_VEC`,
+  `SEARCH_MIN_SIMILARITY`, `DISPLAY_TZ`. See [docs/search.md](docs/search.md).
 - Root `Dockerfile` that builds the bridge, the MCP server and the web panel into one image behind nginx, for
   platforms that accept a single Dockerfile (Coolify). See [docs/coolify.md](docs/coolify.md).
 - MCP tab in the web panel: lists the common MCP clients (Claude, Claude Code, Cursor, VS Code, ChatGPT, Codex,

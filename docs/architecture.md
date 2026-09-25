@@ -36,7 +36,7 @@ flowchart LR
 |-----------|-----------|------|
 | **Bridge** | [`whatsapp-bridge/`](../whatsapp-bridge) | The only process that talks to WhatsApp. Handles pairing, reconnects, incoming messages and history sync, media download, webhooks and the REST API. Owns `messages.db` and `whatsapp.db`. Also holds the panel's login sessions. |
 | **MCP server** | [`whatsapp-mcp-server/`](../whatsapp-mcp-server) | Turns bridge and database capabilities into MCP tools. Reads messages and contacts straight from SQLite; asks the bridge to perform actions (send, edit, react, ...). |
-| **Search indexer** | [`whatsapp-mcp-server/search/`](../whatsapp-mcp-server/search) | Background service that reads `messages.db` read-only and maintains a local keyword-search index. Not yet exposed as MCP tools. See [search.md](search.md). |
+| **Search indexer** | [`whatsapp-mcp-server/search/`](../whatsapp-mcp-server/search) | Background service that reads `messages.db` read-only and maintains a local search index: keyword (FTS5) and semantic (local embeddings in sqlite-vec). The MCP server reads it through the `search` toolset. See [search.md](search.md). |
 | **Web panel** | [`whatsapp-web-ui/`](../whatsapp-web-ui) | Static Next.js app served by nginx. Login, device pairing, sync status, active sessions and webhook management. It calls the bridge API directly from the browser. |
 
 ## Data flow
@@ -76,7 +76,7 @@ WhatsApp MCP follows the Unix philosophy: a solid **transport** layer with small
 
 - **Transport first.** Connection lifecycle, messaging, media, reactions, groups, presence, webhooks and safety gates belong here.
 - **Composable tools.** Tools are atomic and return raw, complete data ([response-design.md](response-design.md)); the AI client combines them.
-- **Heavy processing stays outside.** Transcription, vector search and summarization are better built as separate services or MCP servers
+- **Heavy processing stays outside.** Transcription and summarization are better built as separate services or MCP servers
   that consume `download_media` and `list_messages`, instead of growing the core.
 - **Curated surface.** Tools are grouped into toolsets so an agent only sees what it needs. Prefer extending an action-based tool over adding a new one.
 

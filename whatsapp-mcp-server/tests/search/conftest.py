@@ -260,3 +260,105 @@ def synthetic_store(empty_store: Store) -> Store:
         insert_message(empty_store.messages_db_path, **msg)
 
     return empty_store
+
+
+# --- search fixtures (Phase 2/3) ------------------------------------------------
+
+LOJA_JID = "120363000000000001@g.us"
+LOJA_NAME = "Loja Centro"
+OWNER_JID = "5511900000099@s.whatsapp.net"
+
+_CONCEPTS = {
+    "trip": {"viagem", "sp", "sampa", "paulo", "hotel", "passagem", "voo"},
+    "store": {"loja", "trabalha", "caixa", "gerente", "xxx"},
+    "food": {"bolo", "cenoura", "cafe"},
+}
+
+
+class FakeEmbedder:
+    """Deterministic stand-in for a real model: one dimension per concept, so tests can check that
+    "viagem de SP" lands near "bora marcar sampa" without downloading anything."""
+
+    def __init__(self, name: str = "fake-concepts", concepts: dict | None = None):
+        self.name = name
+        self._concepts = concepts or _CONCEPTS
+        self.dims = len(self._concepts) + 1
+        self.passage_calls = 0
+        self.query_calls = 0
+
+    def _embed(self, text: str) -> list[float]:
+        import re
+        import unicodedata
+
+        plain = "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
+        words = re.findall(r"[a-z0-9]+", plain)
+        vec = [float(sum(w in group for w in words)) for group in self._concepts.values()] + [0.05]
+        norm = sum(v * v for v in vec) ** 0.5
+        return [v / norm for v in vec]
+
+    def embed_passages(self, texts: list[str]) -> list[list[float]]:
+        self.passage_calls += 1
+        return [self._embed(t) for t in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        self.query_calls += 1
+        return self._embed(text)
+
+
+@pytest.fixture
+def search_store(empty_store: Store) -> Store:
+    """Two groups and a private chat with distinct topics: a trip to Sao Paulo, who works at a store, noise."""
+    db = empty_store.messages_db_path
+    wa = empty_store.whatsapp_db_path
+    insert_chat(db, GROUP_JID, GROUP_NAME)
+    insert_chat(db, LOJA_JID, LOJA_NAME)
+    insert_chat(db, ANA_JID, ANA_JID.split("@")[0])
+    insert_contact(wa, their_jid=ANA_JID, full_name=ANA_NAME)
+    insert_contact(wa, their_jid=CARLA_LID_JID, push_name=CARLA_NAME)
+    insert_contact(wa, their_jid=f"{BRUNO_PN}@s.whatsapp.net", full_name=BRUNO_NAME)
+    insert_lid_map(wa, lid=BRUNO_LID_JID.split("@")[0], pn=BRUNO_PN)
+
+    day = 24 * 60
+    rows = [
+        (GROUP_JID, "T01", ANA_JID, "bom dia pessoal", 0),
+        (GROUP_JID, "T02", BRUNO_LID_JID, "bom dia", 1),
+        (GROUP_JID, "T03", ANA_JID, "alguem confirma a viagem pra SP mes que vem?", 60),
+        (GROUP_JID, "T04", CARLA_LID_JID, "eu vou, bora marcar sampa", 62),
+        (GROUP_JID, "T05", OWNER_JID, "fechado, reservo o hotel em Sao Paulo", 3 * day + 300),
+        (GROUP_JID, "T06", BRUNO_LID_JID, "reuniao de planejamento amanha", 5 * day),
+        (GROUP_JID, "T07", ANA_JID, "ok", 5 * day + 1),
+        (LOJA_JID, "L01", CARLA_LID_JID, "a Marina trabalha na loja XXX, no caixa", 1 * day + 120),
+        (LOJA_JID, "L02", BRUNO_LID_JID, "e o Paulo é gerente da loja XXX", 1 * day + 125),
+        (LOJA_JID, "L03", CARLA_LID_JID, "bolo de cenoura no café hoje", 2 * day + 400),
+        (ANA_JID, "P01", ANA_JID, "te ligo mais tarde", 2 * day + 700),
+    ]
+    for message_id, chat_jid, sender, content, minutes in [(r[1], r[0], r[2], r[3], r[4]) for r in rows]:
+        insert_message(
+            db,
+            message_id=message_id,
+            chat_jid=chat_jid,
+            sender=sender,
+            content=content,
+            timestamp=ts(minutes),
+            is_from_me=sender == OWNER_JID,
+        )
+    return empty_store
+
+
+def build_index(store: Store, index_path: str, embedder=None) -> None:
+    """Run the indexer to completion (messages, then embeddings when an embedder is given)."""
+    from search import source
+    from search.index_store import IndexStore
+    from search.indexer import embed_pending, run_once
+
+    index = IndexStore(index_path)
+    try:
+        with source.ContactResolver(store.whatsapp_db_path) as resolver:
+            while run_once(index, store.messages_db_path, resolver):
+                pass
+        if embedder is not None:
+            index.ensure_vec_table(embedder.name, embedder.dims)
+            while embed_pending(index, embedder, batch_size=4):
+                pass
+    finally:
+        index.close()

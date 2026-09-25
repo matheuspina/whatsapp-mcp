@@ -20,14 +20,17 @@ from .config import (
     CHUNK_MAX_CHARS,
     CHUNK_MAX_MESSAGES,
     CHUNK_OVERLAP,
+    EMBED_BATCH_SIZE,
     INDEX_DB_PATH,
     INDEX_POLL_SECONDS,
     resolve_messages_db_path,
     resolve_whatsapp_db_path,
 )
+from .embedder import Embedder, EmbeddingError, create_embedder, embeddings_enabled
 from .index_store import IndexedMessage, IndexStore
 
 BATCH_SIZE = 500
+EMBEDDER_RETRY_SECONDS = 300
 
 
 def chunk_config() -> ChunkConfig:
@@ -90,6 +93,32 @@ def run_once(
     return len(batch)
 
 
+def embed_pending(store: IndexStore, embedder: Embedder, batch_size: int = EMBED_BATCH_SIZE) -> int:
+    """Embed one batch of chunks that have no vector yet. Returns how many were embedded (0 = none left)."""
+    pending = store.fetch_unembedded_chunks(batch_size)
+    if not pending:
+        return 0
+    vectors = embedder.embed_passages([chunk.text for chunk in pending])
+    store.store_vectors(list(zip(pending, vectors, strict=True)))
+    return len(pending)
+
+
+def _load_embedder(store: IndexStore) -> Embedder | None:
+    """Create the configured embedder and prepare vec_chunks for it; None if it cannot be used right now."""
+    try:
+        embedder = create_embedder()
+        if store.ensure_vec_table(embedder.name, embedder.dims):
+            logger.info("search embeddings: %d chunks queued for embedding", store.count_chunks(embedded=False))
+        return embedder
+    except (EmbeddingError, RuntimeError) as exc:
+        logger.warning(
+            "search embeddings: unavailable, keeping keyword indexing only (retry in %ds): %s",
+            EMBEDDER_RETRY_SECONDS,
+            exc,
+        )
+        return None
+
+
 def run_forever(
     messages_db_path: str,
     whatsapp_db_path: str,
@@ -105,11 +134,35 @@ def run_forever(
         if is_backfill:
             logger.info("search indexer: starting backfill of %d messages", total_pending)
 
+        use_embeddings = embeddings_enabled()
+        embedder: Embedder | None = None
+        next_embedder_attempt = 0.0
+        embedded_total = 0
+
         processed_total = 0
         start_time = time.monotonic()
         while True:
             processed = run_once(store, messages_db_path, resolver)
             if not processed:
+                # Caught up on messages: spend the idle time embedding, and only sleep when that is done too.
+                if use_embeddings and embedder is None and time.monotonic() >= next_embedder_attempt:
+                    embedder = _load_embedder(store)
+                    if embedder is None:
+                        next_embedder_attempt = time.monotonic() + EMBEDDER_RETRY_SECONDS
+                if embedder is not None:
+                    try:
+                        embedded = embed_pending(store, embedder)
+                    except Exception:
+                        logger.exception("search embeddings: batch failed, retrying later")
+                        embedded = 0
+                    if embedded:
+                        embedded_total += embedded
+                        logger.info(
+                            "search embeddings: embedded %d chunks this run, %d pending",
+                            embedded_total,
+                            store.count_chunks(embedded=False),
+                        )
+                        continue
                 time.sleep(poll_seconds)
                 continue
 

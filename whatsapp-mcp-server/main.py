@@ -11,8 +11,14 @@ from mcp.server.fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from lib.oauth import setup_oauth
+from lib.utils import MESSAGES_DB_PATH as _MESSAGES_DB_PATH
 from lib.utils import STORE_PATH as _STORE_PATH
 from lib.utils import WHATSAPP_API_BASE_URL as _BRIDGE_URL
+from search import config as _search_config
+from search.embedder import create_embedder as _create_embedder
+from search.embedder import embeddings_enabled as _embeddings_enabled
+from search.search import SearchMode
+from search.search import SearchService as _SearchService
 
 # Phase 2: Group Management
 from whatsapp import add_group_members as whatsapp_add_group_members
@@ -84,6 +90,7 @@ ALL_TOOLSETS = {
     "presence",
     "account_admin",
     "newsletter",
+    "search",
 }
 DEFAULT_TOOLSETS = set(ALL_TOOLSETS)
 ENABLED_TOOLSETS = {
@@ -275,6 +282,86 @@ def get_message_context(message_id: str, before: int = 5, after: int = 5) -> dic
     """
     context = whatsapp_get_message_context(message_id, before, after)
     return context
+
+
+_search_service: _SearchService | None = None
+
+
+def _get_search_service() -> _SearchService:
+    """The shared SearchService, created on first use so the embedding model only loads if it is needed."""
+    global _search_service
+    if _search_service is None:
+        _search_service = _SearchService(
+            embedder_factory=_create_embedder if _embeddings_enabled() else None,
+            messages_db_path=_MESSAGES_DB_PATH,
+            min_similarity=_search_config.SEARCH_MIN_SIMILARITY,
+        )
+    return _search_service
+
+
+@tool(
+    "search",
+    "Search Messages",
+    read_only=True,
+    idempotent=True,
+    open_world=False,
+    description=(
+        "Search the whole synced WhatsApp history by exact words and by meaning, in Portuguese or any language. "
+        "Returns conversation excerpts (a few consecutive messages) with chat, sender and date, best first. "
+        "Strategy: (1) if the user names a chat, pass it as `chat`; if the name is ambiguous the error lists the "
+        "candidates, so retry with a JID. (2) Read the excerpt around a hit with `get_message_context` (use a "
+        "message `id` from the result) before concluding who said what and when. (3) If nothing is found and "
+        "`coverage.oldest_indexed` is more recent than the period asked about, check `index_status`, then "
+        "consider `request_history` for that chat and search again. (4) For open questions such as who works "
+        "somewhere, run 2-3 searches with different wordings and combine what they return. "
+        "`keyword_hit` marks the messages that contain the search words; other messages in an excerpt are context."
+    ),
+)
+def search_messages(
+    query: str,
+    chat: str | None = None,
+    sender: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    mode: SearchMode = "hybrid",
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Search messages by words and meaning.
+
+    Args:
+        query: Free text, for example "viagem de SP" or "quem trabalha na loja XXX"
+        chat: Optional chat name (accent-insensitive, partial is fine) or JID to search only that chat
+        sender: Optional sender name or phone number to search only what that person wrote
+        date_from: Optional first day, ISO `YYYY-MM-DD`, in America/Bahia time
+        date_to: Optional last day (inclusive), ISO `YYYY-MM-DD`, in America/Bahia time
+        mode: `hybrid` (default) combines both, `keyword` matches words only, `semantic` matches meaning only
+        limit: Excerpts to return (default 10, max 30)
+    """
+    return _get_search_service().search(
+        query=query, chat=chat, sender=sender, date_from=date_from, date_to=date_to, mode=mode, limit=limit
+    )
+
+
+@tool(
+    "search",
+    "Index Status",
+    read_only=True,
+    idempotent=True,
+    open_world=False,
+    description=(
+        "Report how complete the message search index is: messages and excerpts indexed, oldest and newest "
+        "dates, how many excerpts still wait for semantic embeddings, and which embedding model is used. "
+        "Pass `chat` for that chat's own range. Use it when search finds nothing to tell 'no such message' "
+        "apart from 'not synced or not indexed yet'."
+    ),
+)
+def index_status(chat: str | None = None) -> dict[str, Any]:
+    """Get the state of the search index.
+
+    Args:
+        chat: Optional chat name or JID to include that chat's indexed range
+    """
+    return _get_search_service().status(chat=chat)
 
 
 @tool("send", "Send Message", read_only=False)

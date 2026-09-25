@@ -56,13 +56,26 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1536M  # loads the local embedding model on the first semantic search
           cpus: '1'
     ports:
       - "127.0.0.1:8081:8081"  # MCP server (localhost only)
     volumes:
       - ./store:/app/store
+      # The search index. Mounted writable only because SQLite needs to touch the WAL side files to read it;
+      # the server opens index.db read-only.
+      - ./store-index:/app/index
+      - model-cache:/app/models
     environment:
+      - INDEX_DB_PATH=/app/index/index.db
+      - EMBEDDING_CACHE_DIR=/app/models
+      - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-fastembed}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - SEARCH_K_FTS=${SEARCH_K_FTS:-50}
+      - SEARCH_K_VEC=${SEARCH_K_VEC:-50}
+      - SEARCH_MIN_SIMILARITY=${SEARCH_MIN_SIMILARITY:-0}
+      - DISPLAY_TZ=${DISPLAY_TZ:-America/Bahia}
       - TZ=UTC
       - DEBUG=true
       - MCP_TRANSPORT=streamable-http
@@ -125,16 +138,22 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.5'
+          memory: 2G  # ONNX embedding model plus a batch of chunks
+          cpus: '2'
     working_dir: /app/whatsapp-mcp-server
     entrypoint: ["python", "-m", "search.indexer"]
     volumes:
       - ./store:/app/store:ro          # messages.db / whatsapp.db, read-only: the indexer never writes to the bridge store
       - ./store-index:/app/index       # index.db lives in its own writable location instead
+      - model-cache:/app/models        # embedding model, downloaded once on first start
     environment:
       - TZ=UTC
       - INDEX_DB_PATH=/app/index/index.db
+      - EMBEDDING_CACHE_DIR=/app/models
+      - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-fastembed}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
+      - EMBED_BATCH_SIZE=${EMBED_BATCH_SIZE:-32}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
       - INDEX_POLL_SECONDS=${INDEX_POLL_SECONDS:-20}
       - CHUNK_GAP_MINUTES=${CHUNK_GAP_MINUTES:-30}
       - CHUNK_MAX_MESSAGES=${CHUNK_MAX_MESSAGES:-15}
@@ -150,3 +169,6 @@ services:
 networks:
   whatsapp_internal:
     driver: bridge
+
+volumes:
+  model-cache:  # local embedding model (~0.5 GB), shared by the indexer and the MCP server

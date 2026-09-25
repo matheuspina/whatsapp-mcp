@@ -88,8 +88,8 @@ server of this project. (Text the assistant reads through a tool does reach your
 - **Media.** Download images, video, audio and documents, with images returned inline to the assistant.
 - **Webhooks.** Forward incoming messages to HTTP endpoints, with triggers, matching rules, HMAC signatures and retries.
 - **Web panel.** Sign in, pair a device with a phone code, watch sync status, see and end active sessions, manage webhooks.
-- **Local search index (in progress).** A background service builds a keyword-searchable index (SQLite FTS5) of your message history, entirely on your machine, as the foundation for local hybrid search. Not yet exposed as an MCP tool. See [docs/search.md](docs/search.md).
-- **A tool surface you control.** 27 tools in 10 toolsets; expose only what your assistant needs.
+- **Local hybrid search.** A background service indexes your message history on your machine (SQLite FTS5 for exact words, a local embedding model for meaning), and two MCP tools search it: `search_messages` and `index_status`. No message content leaves your machine. See [docs/search.md](docs/search.md).
+- **A tool surface you control.** 29 tools in 11 toolsets; expose only what your assistant needs.
 - **Secure by default.** Ports on `127.0.0.1` only, API key and login required, HttpOnly session cookies, CSRF and brute-force protection.
 - **Docker first.** One command starts everything; state lives in a single `store/` folder.
 
@@ -141,7 +141,7 @@ flowchart LR
 |-----------|-------|------|
 | [`whatsapp-bridge`](whatsapp-bridge) | Go, [whatsmeow](https://github.com/tulir/whatsmeow), SQLite | Talks to WhatsApp, stores messages, REST API, webhooks, panel sessions |
 | [`whatsapp-mcp-server`](whatsapp-mcp-server) | Python, FastMCP | MCP tools for your AI client |
-| [`whatsapp-mcp-server/search`](whatsapp-mcp-server/search) | Python, background service | Keyword search index (`store-index/index.db`); read-only against `store/`. Phase 1 of local hybrid search |
+| [`whatsapp-mcp-server/search`](whatsapp-mcp-server/search) | Python, background service | Keyword and semantic search index (`store-index/index.db`); read-only against `store/`. Read by the MCP server's `search` toolset |
 | [`whatsapp-web-ui`](whatsapp-web-ui) | Next.js, Tailwind, shadcn/ui | Web panel |
 
 More in [docs/architecture.md](docs/architecture.md) and [docs/search.md](docs/search.md).
@@ -278,7 +278,7 @@ To restrict who the bridge can message, set `WHATSAPP_ALLOWLIST_JIDS=55119999999
 
 ## MCP tools
 
-27 tools in 10 toolsets. Read-only tools are marked <kbd>read</kbd>, tools that change or send things <kbd>write</kbd>, and destructive ones <kbd>destructive</kbd>.
+29 tools in 11 toolsets. Read-only tools are marked <kbd>read</kbd>, tools that change or send things <kbd>write</kbd>, and destructive ones <kbd>destructive</kbd>.
 
 | Toolset | Tool | Description |
 |---------|------|-------------|
@@ -286,6 +286,8 @@ To restrict who the bridge can message, set `WHATSAPP_ALLOWLIST_JIDS=55119999999
 | `core` | `get_chat` <kbd>read</kbd> | Metadata of one chat by JID |
 | `core` | `list_messages` <kbd>read</kbd> | Search and filter messages, optionally with surrounding context |
 | `core` | `get_message_context` <kbd>read</kbd> | Messages before and after a given message |
+| `search` | `search_messages` <kbd>read</kbd> | Search the synced history by exact words and by meaning, with chat, sender and date filters |
+| `search` | `index_status` <kbd>read</kbd> | How complete the search index is: counts, date range, pending embeddings, model |
 | `core` | `search_contacts` <kbd>read</kbd> | Find contacts by name or number |
 | `core` | `list_all_contacts` <kbd>read</kbd> | List all contacts |
 | `core` | `get_contact_context` <kbd>read</kbd> | Contact details, related chats and last interaction in one call |
@@ -445,7 +447,7 @@ Details, code style and how to add a tool are in [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Roadmap
 
-Local hybrid search is underway: the background indexer and keyword search (FTS5) are in place ([docs/search.md](docs/search.md)); local embeddings and MCP search tools are next.
+Local hybrid search is in place: the background indexer, local embeddings and the `search_messages` / `index_status` tools ([docs/search.md](docs/search.md)). It has not yet been tuned or measured on a large real history.
 Also next up: persistent panel sessions.
 See [ROADMAP.md](ROADMAP.md) and the [changelog](CHANGELOG.md).
 

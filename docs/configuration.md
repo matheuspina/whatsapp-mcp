@@ -42,7 +42,7 @@ See [history-sync.md](history-sync.md).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WHATSAPP_MCP_TOOLSETS` | `all` | Toolsets to expose, comma separated: `core`, `send`, `media`, `history`, `contacts_write`, `message_admin`, `groups`, `presence`, `account_admin`, `newsletter`, or `all`. |
+| `WHATSAPP_MCP_TOOLSETS` | `all` | Toolsets to expose, comma separated: `core`, `send`, `media`, `history`, `contacts_write`, `message_admin`, `groups`, `presence`, `account_admin`, `newsletter`, `search`, or `all`. |
 | `WHATSAPP_MCP_TOOLS` | *(none)* | Individual tools to expose in addition, by name (for example `manage_group,delete_message`). |
 | `MCP_TRANSPORT` | `stdio` (`streamable-http` in Docker) | `stdio`, `sse` or `streamable-http`. |
 | `HOST` / `PORT` | `0.0.0.0` / `8081` | Bind address for the HTTP transports. |
@@ -65,6 +65,22 @@ The background indexer that keeps the search index (`store-index/index.db`) up t
 | `CHUNK_MAX_MESSAGES` | `15` | Maximum messages per chunk before it splits. |
 | `CHUNK_MAX_CHARS` | `1500` | Maximum characters per chunk before it splits. |
 | `CHUNK_OVERLAP` | `2` | Messages repeated at the start of the next chunk, for context. |
+| `EMBEDDING_BACKEND` | `fastembed` | `fastembed` (ONNX, no PyTorch), `sentence_transformers` (needs `torch` and `sentence-transformers` installed), `ollama`, or `none` to keep keyword search only. Set the same value for the `indexer` and `whatsapp-mcp` services. |
+| `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Embedding model (384 dimensions). Changing it makes the indexer rebuild every vector. With `ollama`, an Ollama model name such as `bge-m3`. |
+| `EMBEDDING_CACHE_DIR` | *(library default)* | Where the model is stored. Compose points it at the `model-cache` volume. |
+| `EMBED_BATCH_SIZE` | `32` | Chunks embedded per step. Lower it if the indexer runs out of memory. |
+| `OLLAMA_URL` | `http://host.docker.internal:11434` | Ollama server, only for `EMBEDDING_BACKEND=ollama`. |
+
+## Search tools
+
+Read by the MCP server's `search` toolset (`search_messages`, `index_status`). See [search.md](search.md).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SEARCH_K_FTS` | `50` | Keyword candidates taken before fusing with the semantic ones. |
+| `SEARCH_K_VEC` | `50` | Semantic candidates taken before fusing with the keyword ones. |
+| `SEARCH_MIN_SIMILARITY` | `0` | Drop semantic matches below this cosine similarity (0 keeps everything). Scores of the default model cluster between roughly 0.8 and 0.9, so tune it against your own history before setting it. |
+| `DISPLAY_TZ` | `America/Bahia` | Timezone for the `date_from` / `date_to` filters and for the dates in results. |
 
 ## Bridge
 
