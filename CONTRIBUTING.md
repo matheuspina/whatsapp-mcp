@@ -1,110 +1,92 @@
-# Contributing to WhatsApp MCP Extended
+# Contributing
 
-Thanks for your interest in contributing!
+Thanks for wanting to help. Bug reports, ideas and pull requests are all welcome.
 
-## Quick Start
+By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Before you start
+
+- **Bugs and ideas:** open an [issue](https://github.com/matheuspina/whatsapp-mcp/issues). Check for an existing one first, and include steps to reproduce, logs, and your environment (OS, Docker version).
+- **Security problems:** do **not** open a public issue. See [SECURITY.md](SECURITY.md).
+- **Larger changes:** open an issue to discuss the approach before writing the code.
+
+## Licensing of contributions
+
+This project is released under the [PolyForm Noncommercial License 1.0.0](LICENSE), and the maintainer also offers
+commercial licenses ([COMMERCIAL.md](COMMERCIAL.md)). To make that possible, by submitting a contribution you confirm that:
+
+1. you wrote it, or have the right to submit it;
+2. it is licensed to everyone under the project's [`LICENSE`](LICENSE); and
+3. you grant Matheus Pina a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, modify,
+   sublicense and relicense your contribution, including under commercial terms.
+
+You keep the copyright in your contribution. If you cannot agree to this, please do not submit code.
+
+## Setting up
+
+Requirements: Docker with Compose 2.24 or later. For local development also Go 1.25+, [uv](https://docs.astral.sh/uv/) with Python 3.11+, and Node.js 20+.
 
 ```bash
-# Clone
-git clone https://github.com/felixisaac/whatsapp-mcp-extended
-cd whatsapp-mcp-extended
-
-# Start services
-docker-compose up -d
-
-# Watch logs for QR code
-docker-compose logs -f whatsapp-bridge
+git clone https://github.com/matheuspina/whatsapp-mcp.git
+cd whatsapp-mcp
+cp .env.example .env      # then set API_KEY, WEB_UI_USERNAME and WEB_UI_PASSWORD
+docker compose up -d --build
 ```
 
-## Development Setup
+There is no hot reload: code is copied into the images, so after a change run `docker compose up -d --build <service>`.
 
-### Go Bridge (whatsapp-bridge/)
+### Bridge (Go)
 
 ```bash
 cd whatsapp-bridge
-go run main.go
-go test ./...
+go test -race ./...
+gofmt -l .                # should print nothing for files you changed
 ```
 
-### Python MCP Server (whatsapp-mcp-server/)
+### MCP server (Python)
 
 ```bash
 cd whatsapp-mcp-server
-uv sync
-uv run python main.py
-
-# Pre-commit checks
-uv run python check.py
+uv sync --all-extras
+uv run python check.py    # quick syntax check, ruff and mypy
+uv run pytest --cov=lib -v
 ```
 
-### Web UI (whatsapp-web-ui/)
+### Web panel (Next.js)
 
 ```bash
 cd whatsapp-web-ui
-npm install
-npm run dev
+npm ci
+npx tsc --noEmit
+npx eslint src
+npm run build
 ```
 
-## Code Style
+## Code style
 
-### Go
-- Run `go fmt` before committing
-- Follow standard Go conventions
+- **Go:** `gofmt`, standard conventions, `fmt.Errorf("context: %w", err)` for wrapping, godoc comments on exported identifiers, table-driven tests.
+- **Python:** `ruff` and `mypy`, type hints and docstrings on public functions, raise exceptions instead of returning empty results on error.
+- **TypeScript:** strict types, keep the panel free of stored credentials (see [authentication](docs/authentication.md)).
+- Use the loggers, not `print` or `fmt.Println` (except for the QR code and startup status).
 
-### Python
-- Use `ruff` for linting
-- Use `mypy` for type checking
-- Run `uv run python check.py` before committing
+## Pull requests
 
-## Pull Requests
+1. Fork and create a branch: `git checkout -b feat/my-change`.
+2. Keep the change focused on one thing, and add or update tests.
+3. Update the documentation when behaviour changes.
+4. Make sure the checks above pass.
+5. Write [Conventional Commit](https://www.conventionalcommits.org) messages in English (`feat(bridge): ...`, `fix(web-ui): ...`, `docs: ...`).
+6. Open a pull request and describe what changed and why.
 
-1. Fork the repo
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes
-4. Run tests and checks
-5. Commit with clear messages
-6. Push and open a PR
+Never commit `.env`, `store/`, session files, message data or real phone numbers. Use obviously fake data in tests and examples.
 
-### Upstreaming & Downstream Fork Sync
+## Adding an MCP tool
 
-`FelixIsaac/whatsapp-mcp-extended` actively maintains an automated downstream monitoring workflow (`.github/workflows/downstream-check.yml`) that tracks satellite forks. If you maintain a fork and build something useful:
-- Open a PR directly to `main` — we actively review and merge high-quality community PRs!
-- Mention your fork/feature in **Community Acknowledgements** so your work is credited across the ecosystem.
+1. Add the Go endpoint in `whatsapp-bridge/internal/api/handlers.go` and its route in `server.go`.
+2. Add the Python function in `whatsapp-mcp-server/whatsapp.py`.
+3. Prefer extending an existing action-based tool in `main.py`. Add a new tool only for a distinct task, not for a single endpoint.
+4. Assign it to a toolset and give it a title and annotations (read-only, destructive, and so on). Use `Literal[...]` for action parameters.
+5. Add or update tests in `whatsapp-mcp-server/tests/test_main_tools.py`.
+6. Update the tool tables in the README.
 
-### PR Guidelines
-
-- Keep PRs focused on a single feature/fix
-- Update documentation if needed
-- Add tests for new functionality
-- Ensure all checks pass
-
-## Reporting Issues
-
-- Check existing issues first
-- Include steps to reproduce
-- Include error logs if applicable
-- Specify your environment (OS, Docker version, etc.)
-
-## Architecture
-
-```
-whatsapp-bridge/     # Go - WhatsApp connection, REST API
-whatsapp-mcp-server/ # Python - MCP tools, Claude integration
-whatsapp-web-ui/     # HTML/JS - Chat/contact/webhook UI
-```
-
-## Adding New MCP Tools
-
-1. Add Go endpoint in `whatsapp-bridge/internal/api/handlers.go`
-2. Add route in `whatsapp-bridge/internal/api/server.go`
-3. Add Python function in `whatsapp-mcp-server/whatsapp.py`
-4. Prefer extending an existing composable MCP tool in `whatsapp-mcp-server/main.py`
-5. Add a new MCP tool only for a distinct user task, not a one-endpoint wrapper
-6. Assign the tool to a `WHATSAPP_MCP_TOOLSETS` group and add title/annotations
-7. Use `Literal[...]` for action/sort/status parameters where possible
-8. Add/update `whatsapp-mcp-server/tests/test_main_tools.py`
-9. Update README tool list and migration notes
-
-## Questions?
-
-Open an issue or discussion on GitHub.
+More on the design in [docs/architecture.md](docs/architecture.md).

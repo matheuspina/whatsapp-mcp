@@ -1,0 +1,29 @@
+# Changelog
+
+All notable changes to this project are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
+
+### Added
+- Web panel login with a username and password from `.env` (`WEB_UI_USERNAME`, `WEB_UI_PASSWORD`, `WEB_UI_SESSION_TTL`).
+- Server-side sessions delivered as an `HttpOnly`, `SameSite=Strict` cookie, with CSRF protection through an `Origin` check and login throttling.
+- Active sessions list in Settings, with the ability to end other sessions. New endpoints: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/sessions`, `DELETE /api/auth/sessions/{id}`.
+- Documentation: configuration reference, authentication, architecture, and a rewritten README and security policy.
+- `NOTICE.md`, `COMMERCIAL.md`, `ACKNOWLEDGEMENTS.md` and a code of conduct.
+
+### Changed
+- Project name and branding: **WhatsApp MCP** by Matheus Pina. The MCP server now reports itself as `whatsapp-mcp`.
+- License: modifications and additions are under the PolyForm Noncommercial License 1.0.0. Inherited MIT-licensed code keeps its notice (see [NOTICE.md](NOTICE.md)).
+- The web panel no longer asks for, stores or sends the API key. Any key saved by the earlier panel in the browser is discarded.
+- Unauthorized bridge responses are JSON instead of plain text.
+- `docker-compose.yaml` passes `.env` to the bridge (`env_file`) and the history sync variables through, so they actually take effect.
+- Documentation reorganized under `docs/`.
+
+### Security
+- The bridge no longer prints `API_KEY` in its startup banner.
+
+### Removed
+- Files specific to previous maintainers: a hard-coded launcher script, funding configuration, a fork-monitoring workflow, generated Windows scheduler scripts, development reports and an example screenshot.

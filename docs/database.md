@@ -1,8 +1,8 @@
-# WhatsApp MCP Extended - Database Design Document
+# Database Design
 
 ## Overview
 
-This document details the complete database architecture, current schema, data flows, and future enhancement opportunities for the WhatsApp MCP Extended project.
+This document details the complete database architecture, current schema, data flows, and future enhancement opportunities for the WhatsApp MCP project.
 
 ---
 

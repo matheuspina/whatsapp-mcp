@@ -49,7 +49,7 @@ ls -la migrations/001_add_metadata_fields.sql
 
 ```bash
 # Navigate to project root
-cd whatsapp-mcp-extended
+cd whatsapp-mcp
 
 # Run migration
 sqlite3 whatsapp-bridge/store/messages.db < whatsapp-bridge/migrations/001_add_metadata_fields.sql
@@ -307,7 +307,7 @@ After running migration:
 
 ## Questions?
 
-See [PHASE_1_PLAN.md](./PHASE_1_PLAN.md) for detailed schema information or check logs:
+See [database.md](./database.md) for the schema, or check the logs:
 
 ```bash
 docker-compose logs whatsapp-bridge --tail=50

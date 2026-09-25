@@ -1,48 +1,48 @@
-# AGENTS.md — Developer & AI Agent Guidelines
+# AGENTS.md: guidelines for AI agents and contributors
 
-Guidelines and architecture overview for AI agents and human contributors working on **whatsapp-mcp-extended**.
+Read this before changing code in **WhatsApp MCP**. Human contributors should also read [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
+## Architecture
 
-## 🎯 Architecture Overview
+1. **`whatsapp-bridge/` (Go).** Built on `whatsmeow`. Owns the WhatsApp connection, `store/messages.db` and `store/whatsapp.db`, media downloads, webhooks, the REST API, and the web panel's login sessions (`internal/auth`).
+2. **`whatsapp-mcp-server/` (Python).** FastMCP server exposing 27 MCP tools grouped in toolsets. Reads messages straight from SQLite and calls the bridge REST API for actions. Some modules under `lib/` (`recall.py`, `transcribe.py`) are unused leftovers and are not wired into any tool.
+3. **`whatsapp-web-ui/` (Next.js, static export).** Web panel: login, pairing, sync status, active sessions, webhooks. Calls the bridge API from the browser.
 
-`whatsapp-mcp-extended` consists of three core components:
+See [docs/architecture.md](docs/architecture.md).
 
-1. **`whatsapp-bridge/` (Go):** High-performance Go bridge built on `whatsmeow`. Handles WhatsApp Web socket connections, session persistence (`store/whatsapp.db`), media downloads (`/api/download`), and Webhook delivery.
-2. **`whatsapp-mcp-server/` (Python):** FastMCP server exposing 26+ MCP tools to AI clients (Claude Code, Cursor, OpenCode, Codex). Communicates with the Go bridge over local HTTP. Supports optional extras:
-   - `uv sync --extra transcribe` (On-device Apple Silicon voice-note transcription via `mlx-whisper`).
-   - `uv sync --extra recall` (Multilingual semantic search via `sentence-transformers`).
-3. **`whatsapp-web-ui/` (Next.js):** Local web dashboard for QR code scanning, session status, and message inspection.
+## Critical rules
 
----
+1. **Safety of the user's account.**
+   - Never change send rates or payload behaviour in ways that could trigger WhatsApp anti-spam detection.
+   - Respect the `WHATSAPP_ALLOWLIST_JIDS` gate when it is set.
+   - Never call tools that send, edit or delete messages while developing or testing, not even "to check that it works".
 
-## ⚠️ Critical Rules for AI Agents
+2. **Privacy.**
+   - Never log message content. Log counts, ids and timings.
+   - Never commit `.env`, `store/`, session files, real phone numbers or message data. Use obviously fake data in tests and docs.
 
-1. **Security & Anti-Ban Safety:**
-   * Never modify rates or payload sizes in a way that triggers WhatsApp anti-spam detection.
-   * Respect JID whitelist / allowlist safety gates when enabled.
+3. **Credentials stay out of the browser.**
+   - The panel authenticates with an `HttpOnly` session cookie. Do not add code that keeps tokens, passwords or the API key in `localStorage`, `sessionStorage` or JavaScript-readable cookies.
+   - Do not print secrets in logs or banners.
 
-2. **Cross-Platform Compatibility:**
-   * Ensure optional dependencies (`mlx-whisper`, `sentence-transformers`) use lazy imports and graceful fallback handlers (`{success: false, message: ...}`) so non-Apple-Silicon systems maintain full functionality.
+4. **Database and state.**
+   - SQLite access to `messages.db` and `whatsapp.db` uses WAL mode and proper transactions. Do not modify `whatsapp.db`, which belongs to whatsmeow.
+   - Never break LID to phone JID resolution (`<id>@lid` to phone JID).
+   - Schema changes ship as idempotent, append-only migrations (see [docs/migrations.md](docs/migrations.md)).
 
-3. **Database & State Safety:**
-   * SQLite operations on `messages.db` and `store/whatsapp.db` must use WAL mode and proper transaction boundaries.
-   * Never break LID-to-phone-JID lookup resolution (`<id>@lid` -> phone JID).
+5. **Optional dependencies** must be imported lazily and fail with a structured error (`{success: false, message: ...}`), so the default install keeps working.
 
-4. **Automated Downstream Monitoring:**
-   * `.github/workflows/downstream-check.yml` periodically audits active satellite forks (`simonseifert`, `bitterdev`, `domdomegg`, `Coriatel`, `laudite`, `kasperpeulen`, `slarrain`) for new commits to ensure community fixes are merged upstream.
-
----
-
-## 🧪 Quick Test Commands
+## Quick commands
 
 ```bash
-# Run Go bridge tests
-cd whatsapp-bridge && go test ./...
+# Bridge
+cd whatsapp-bridge && go test -race ./...
 
-# Run Python MCP server tests
-cd whatsapp-mcp-server && uv run pytest
+# MCP server
+cd whatsapp-mcp-server && uv run pytest && uv run ruff check .
 
-# Check python formatting & linting
-cd whatsapp-mcp-server && uv run ruff check .
+# Web panel
+cd whatsapp-web-ui && npx tsc --noEmit && npx eslint src && npm run build
 ```
+
+There is no hot reload in Docker. After a change: `docker compose up -d --build <service>`.

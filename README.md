@@ -1,375 +1,489 @@
-# WhatsApp MCP Extended
+<div align="center">
 
-An extended Model Context Protocol (MCP) server for WhatsApp with a toolset-gated, agent-facing surface for messaging, search, media, group management, webhooks, presence, and more.
+<img src="docs/assets/logo.svg" width="112" alt="WhatsApp MCP logo">
 
-> Built on [AdamRussak/whatsapp-mcp](https://github.com/AdamRussak/whatsapp-mcp) (webhooks, containers) which forked [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp) (original). Extended with reactions, message editing, polls, group management, presence, newsletters, and more.
+# WhatsApp MCP
 
-![WhatsApp MCP](./example-use.png)
+**Give your AI assistant local, controlled access to your WhatsApp: read, search and, if you allow it, send, through the Model Context Protocol.**
 
-## What's New (vs Original)
+by [Matheus Pina](https://github.com/matheuspina)
 
-| Feature | Original | Extended |
-|---------|----------|----------|
-| MCP Tools | 12 | **26 default / 15 lean** |
-| Reactions | - | ✅ |
-| Edit/Delete Messages | - | ✅ |
-| Group Management | - | ✅ |
-| Polls | - | ✅ |
-| History Sync | - | ✅ |
-| Presence/Online Status | - | ✅ |
-| Newsletters | - | ✅ |
-| Webhooks | - | ✅ |
-| Custom Nicknames | - | ✅ |
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
+[![Commercial use](https://img.shields.io/badge/commercial%20use-license%20required-orange)](COMMERCIAL.md)
+[![Go Tests](https://github.com/matheuspina/whatsapp-mcp/actions/workflows/go-test.yml/badge.svg)](https://github.com/matheuspina/whatsapp-mcp/actions/workflows/go-test.yml)
+[![Python Tests](https://github.com/matheuspina/whatsapp-mcp/actions/workflows/python-test.yml/badge.svg)](https://github.com/matheuspina/whatsapp-mcp/actions/workflows/python-test.yml)
+[![Lint](https://github.com/matheuspina/whatsapp-mcp/actions/workflows/lint.yml/badge.svg)](https://github.com/matheuspina/whatsapp-mcp/actions/workflows/lint.yml)
+[![Security Scan](https://github.com/matheuspina/whatsapp-mcp/actions/workflows/security.yml/badge.svg)](https://github.com/matheuspina/whatsapp-mcp/actions/workflows/security.yml)
+
+![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-compatible-8A2BE2)
+[![Last commit](https://img.shields.io/github/last-commit/matheuspina/whatsapp-mcp)](https://github.com/matheuspina/whatsapp-mcp/commits/main)
+[![Issues](https://img.shields.io/github/issues/matheuspina/whatsapp-mcp)](https://github.com/matheuspina/whatsapp-mcp/issues)
+[![Stars](https://img.shields.io/github/stars/matheuspina/whatsapp-mcp?style=social)](https://github.com/matheuspina/whatsapp-mcp/stargazers)
+
+[Quick start](#quick-start) ·
+[Features](#features) ·
+[Connect your AI client](#connect-your-ai-client) ·
+[Tools](#mcp-tools) ·
+[Documentation](docs/README.md) ·
+[Security](SECURITY.md) ·
+[Commercial use](#license-and-commercial-use)
+
+</div>
+
+> [!IMPORTANT]
+> **Free for noncommercial use. Commercial use requires a license.**
+> To use this project in a business, for a client, or in a product or service, contact **[mathpinab@gmail.com](mailto:mathpinab@gmail.com)**.
+> See [License and commercial use](#license-and-commercial-use).
+
+> [!WARNING]
+> This project uses the **unofficial** WhatsApp Web protocol. It is not affiliated with WhatsApp or Meta, it can put your account at risk,
+> and an AI agent connected to it can read and send your private messages. Read the [Disclaimer](#disclaimer) and [SECURITY.md](SECURITY.md) first.
+
+---
+
+## Table of contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [Connect your AI client](#connect-your-ai-client)
+- [MCP tools](#mcp-tools)
+- [Web panel](#web-panel)
+- [Configuration](#configuration)
+- [Security and privacy](#security-and-privacy)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License and commercial use](#license-and-commercial-use)
+- [Disclaimer](#disclaimer)
+- [Acknowledgements](#acknowledgements)
+
+## Overview
+
+WhatsApp MCP links to your WhatsApp account the same way WhatsApp Web does (as a linked device, paired with a code) and exposes it as
+[Model Context Protocol](https://modelcontextprotocol.io) tools. Any MCP-capable assistant, such as Claude, can then do things like:
+
+> *"Summarize what was said in the Family group since yesterday."*
+> *"Find the last message where Ana mentioned the invoice, and show me the messages around it."*
+> *"Reply to Carlos that I will be there at 6."*
+> *"Download the PDF from the message Marina sent this morning."*
+
+Everything runs **on your own machine** in Docker containers. Your messages are stored in local SQLite files and are not sent to any
+server of this project. (Text the assistant reads through a tool does reach your AI provider, as with any tool result. See
+[Security and privacy](#security-and-privacy).)
+
+## Features
+
+- **Read and search.** List chats and contacts, read messages with filters, get the messages around a hit, resolve contact names.
+- **Send.** Text with replies and quotes, files, voice notes, reactions and polls, with an optional recipient allowlist.
+- **Manage.** Edit and delete messages, mark as read, manage groups, nicknames, presence, the blocklist and newsletters.
+- **History.** Choose how far back to sync when pairing, and request older messages of a single chat on demand.
+- **Media.** Download images, video, audio and documents, with images returned inline to the assistant.
+- **Webhooks.** Forward incoming messages to HTTP endpoints, with triggers, matching rules, HMAC signatures and retries.
+- **Web panel.** Sign in, pair a device with a phone code, watch sync status, see and end active sessions, manage webhooks.
+- **A tool surface you control.** 27 tools in 10 toolsets; expose only what your assistant needs.
+- **Secure by default.** Ports on `127.0.0.1` only, API key and login required, HttpOnly session cookies, CSRF and brute-force protection.
+- **Docker first.** One command starts everything; state lives in a single `store/` folder.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/screenshot-login.png" alt="Sign-in page"><br><sub><b>Sign in</b> with the username and password from your <code>.env</code></sub></td>
+    <td width="50%"><img src="docs/assets/screenshot-dashboard.png" alt="Device pairing dashboard"><br><sub><b>Pairing and sync status</b></sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/screenshot-sessions.png" alt="Active sessions"><br><sub><b>Active sessions</b>, kept on the server and visible from any browser</sub></td>
+    <td width="50%"><img src="docs/assets/screenshot-webhooks.png" alt="Webhook manager"><br><sub><b>Webhook manager</b></sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots use invented data.</sub>
 
 ## Architecture
 
-```
-┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│   whatsapp-bridge   │     │   whatsapp-mcp      │     │   whatsapp-web-ui   │
-│   (Go + whatsmeow)  │◄────│   (Python + MCP)    │     │   (HTML/JS SPA)     │
-│   Port: 8080        │     │   Port: 8081        │     │   Port: 8090        │
-└─────────────────────┘     └─────────────────────┘     └─────────────────────┘
-         │                           │
-         ▼                           ▼
-    ┌─────────────────────────────────────┐
-    │           SQLite (store/)           │
-    │  messages.db │ whatsapp.db          │
-    └─────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Client["AI client<br/>(Claude, Cursor, ...)"]
+    Browser["Web panel<br/>in your browser"]
+
+    subgraph Host["Your machine (Docker Compose, 127.0.0.1 only)"]
+        MCP["whatsapp-mcp<br/>Python, FastMCP<br/>:8081/mcp"]
+        UI["web-ui<br/>Next.js static, nginx<br/>:8090"]
+        Bridge["whatsapp-bridge<br/>Go, whatsmeow<br/>:8180"]
+        Store[("store/<br/>messages.db<br/>whatsapp.db")]
+    end
+
+    WA(["WhatsApp<br/>servers"])
+
+    Client -- "MCP" --> MCP
+    Browser -- "loads panel" --> UI
+    Browser -- "REST, session cookie" --> Bridge
+    MCP -- "REST, X-API-Key" --> Bridge
+    MCP -- "read-only queries" --> Store
+    Bridge <--> Store
+    Bridge <-- "multi-device protocol" --> WA
 ```
 
-## Quick Start
+| Component | Stack | Role |
+|-----------|-------|------|
+| [`whatsapp-bridge`](whatsapp-bridge) | Go, [whatsmeow](https://github.com/tulir/whatsmeow), SQLite | Talks to WhatsApp, stores messages, REST API, webhooks, panel sessions |
+| [`whatsapp-mcp-server`](whatsapp-mcp-server) | Python, FastMCP | MCP tools for your AI client |
+| [`whatsapp-web-ui`](whatsapp-web-ui) | Next.js, Tailwind, shadcn/ui | Web panel |
 
-### Docker (Recommended)
+More in [docs/architecture.md](docs/architecture.md).
+
+## Quick start
+
+### Requirements
+
+- Docker with **Compose 2.24 or later** (Docker Desktop includes it)
+- A phone with WhatsApp, on Wi-Fi and charging during the first sync
+- About 2 GB of free disk for the Docker images and build cache, plus room for your message history
+
+### 1. Get the code and configure it
 
 ```bash
-git clone https://github.com/felixisaac/whatsapp-mcp-extended
-cd whatsapp-mcp-extended
-
-docker network create n8n_n8n_traefik_network
-docker-compose up -d
-
-# Scan QR code to authenticate
-docker-compose logs -f whatsapp-bridge
+git clone https://github.com/matheuspina/whatsapp-mcp.git
+cd whatsapp-mcp
+cp .env.example .env
 ```
 
-### Claude Desktop / Cursor Integration
+Open `.env` and set three values. Generate strong ones:
 
-Add to your MCP config (`claude_desktop_config.json` or Cursor settings):
+```bash
+openssl rand -hex 32      # API_KEY
+openssl rand -base64 18   # WEB_UI_PASSWORD
+```
+
+| Variable | What it is |
+|----------|------------|
+| `API_KEY` | Secret for the bridge API. Used by the MCP server and scripts |
+| `WEB_UI_USERNAME` | Username for the web panel |
+| `WEB_UI_PASSWORD` | Password for the web panel |
+
+Optionally set `HISTORY_SYNC_DAYS_LIMIT` (default `365`) **before pairing**: it only takes effect when a device is linked.
+
+```bash
+chmod 600 .env            # it holds secrets; it is git-ignored
+```
+
+### 2. Start it
+
+```bash
+docker compose up -d --build
+```
+
+The first build takes a few minutes. Check that everything is healthy:
+
+```bash
+docker compose ps
+```
+
+### 3. Pair your WhatsApp
+
+1. Open **<http://127.0.0.1:8090>** and sign in.
+2. Go to **Pairing**, enter your number with country code and no `+` or spaces (for example `5511999999999`), and click **Generate Code**.
+3. On your phone: **WhatsApp → Settings → Linked devices → Link a device → Link with phone number instead**, then type the 8-character code.
+4. Keep the phone online until the panel shows **Synced** and the message count stops growing.
+
+You can also pair from a terminal with `make pair PHONE=5511999999999`, or scan the QR code that the bridge prints in
+`docker compose logs -f whatsapp-bridge`.
+
+### 4. Connect your AI client
+
+Continue with [Connect your AI client](#connect-your-ai-client).
+
+## Connect your AI client
+
+The MCP server listens on **`http://127.0.0.1:8081/mcp`** (streamable HTTP).
+
+> [!TIP]
+> Keep **manual approval on** for the tools that send or change things (`send_message`, `send_file`, `delete_message`, `manage_group`, and so on),
+> and use [`WHATSAPP_MCP_TOOLSETS`](#choose-your-toolsets) to expose only what the assistant needs.
+
+<details open>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add --transport http whatsapp http://127.0.0.1:8081/mcp
+```
+
+</details>
+
+<details>
+<summary><b>Cursor and other clients that speak HTTP</b></summary>
+
+```json
+{
+  "mcpServers": {
+    "whatsapp": {
+      "url": "http://127.0.0.1:8081/mcp"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Claude Desktop and other stdio-only clients</b></summary>
+
+These clients start the server themselves. It runs on your host, so you need [uv](https://docs.astral.sh/uv/) installed, and it reads
+the same `store/` folder. Add this to `claude_desktop_config.json`, with your real paths:
 
 ```json
 {
   "mcpServers": {
     "whatsapp": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/whatsapp-mcp-extended/whatsapp-mcp-server", "python", "main.py"]
+      "args": ["run", "--directory", "/path/to/whatsapp-mcp/whatsapp-mcp-server", "python", "main.py"],
+      "env": {
+        "WA_STORE_PATH": "/path/to/whatsapp-mcp/store",
+        "BRIDGE_HOST": "127.0.0.1:8180"
+      }
     }
   }
 }
 ```
 
-### Security & Safety Gate (Allowlist)
+`API_KEY` is read from the `.env` file in the repository root.
 
-To restrict outgoing message delivery to a specified set of allowed contacts or groups (useful for dev environments or enterprise privacy gates), set `WHATSAPP_ALLOWLIST_JIDS`:
+</details>
 
-```bash
-# Allow sending only to specific phone numbers or group JIDs (comma-separated)
-WHATSAPP_ALLOWLIST_JIDS=1234567890,9876543210@s.whatsapp.net,1203630123456789@g.us
-```
+### Choose your toolsets
 
-## MCP Tools
-
-Version `0.3.0` exposes the full curated MCP surface by default for compatibility. Users who want a leaner agent context can opt into smaller toolsets.
-
-Default toolsets:
+By default every toolset is enabled. To expose fewer tools, set `WHATSAPP_MCP_TOOLSETS` in `.env`, then `docker compose up -d`:
 
 ```bash
-WHATSAPP_MCP_TOOLSETS=all
+WHATSAPP_MCP_TOOLSETS=core                 # read-only: chats, messages, contacts
+WHATSAPP_MCP_TOOLSETS=core,send,media      # read, send and media (16 tools)
+WHATSAPP_MCP_TOOLS=manage_group            # add single tools by name
 ```
 
-Lean recommended toolsets:
+To restrict who the bridge can message, set `WHATSAPP_ALLOWLIST_JIDS=5511999999999,120363000000000000@g.us`.
 
-```bash
-WHATSAPP_MCP_TOOLSETS=core,send,media
-```
+## MCP tools
 
-Toolsets:
+27 tools in 10 toolsets. Read-only tools are marked <kbd>read</kbd>, tools that change or send things <kbd>write</kbd>, and destructive ones <kbd>destructive</kbd>.
 
-| Toolset | Default | Tools |
-|---------|---------|-------|
-| `core` | Yes | Search/read tools, contact context, group info, profile picture |
-| `send` | Yes | `send_message`, `send_reaction`, `create_poll` |
-| `media` | Yes | `send_file`, `send_audio_message`, `download_media` |
-| `history` | No | `request_history` |
-| `contacts_write` | No | `manage_nickname` |
-| `message_admin` | No | `edit_message`, `delete_message`, `mark_read` |
-| `groups` | No | `manage_group` |
-| `presence` | No | `set_presence`, `subscribe_presence` |
-| `account_admin` | No | `get_blocklist`, `manage_blocklist` |
-| `newsletter` | No | `manage_newsletter` |
-
-You can also expose individual tools with `WHATSAPP_MCP_TOOLS=manage_group,delete_message`.
-
-Breaking change in `0.2.0`: older narrow tools are no longer exposed to the agent. Use the merged replacements below.
-
-Migration:
-
-| Prefer | Replaces |
-|--------|----------|
-| `get_contact_context` | `get_contact_details`, `get_direct_chat_by_contact`, `get_contact_chats`, `get_last_interaction` |
-| `manage_nickname` | `set_nickname`, `get_nickname`, `remove_nickname`, `list_nicknames` |
-| `manage_group` | `create_group`, `add_group_members`, `remove_group_members`, `promote_to_admin`, `demote_admin`, `leave_group`, `update_group` |
-| `get_blocklist`, `manage_blocklist` | `get_blocklist`, `block_user`, `unblock_user` |
-| `manage_newsletter` | `follow_newsletter`, `unfollow_newsletter`, `create_newsletter` |
-
-### Messaging
-| Tool | Description |
-|------|-------------|
-| `send_message` | Send text message (supports optional `quoted_message_id` to reply/quote) |
-| `send_file` | Send image/video/document |
-| `send_audio_message` | Send voice message |
-| `download_media` | Download received media |
-| `send_reaction` | React to message with emoji |
-| `edit_message` | Edit sent message |
-| `delete_message` | Delete/revoke message |
-| `mark_read` | Mark messages as read (blue ticks), or as played for voice messages (`receipt_type="played"`) |
-
-### Chats & Messages
-| Tool | Description |
-|------|-------------|
-| `list_chats` | List all chats |
-| `get_chat` | Get chat by JID |
-| `list_messages` | Search messages with filters |
-| `get_message_context` | Get messages around a specific message |
-| `request_history` | Request older message history |
-
-### Contacts
-| Tool | Description |
-|------|-------------|
-| `search_contacts` | Search by name/phone |
-| `list_all_contacts` | List all contacts |
-| `get_contact_context` | Full contact info, related chats, and last interaction |
-| `manage_nickname` | Set/get/remove/list custom nicknames |
-
-### Groups
-| Tool | Description |
-|------|-------------|
-| `get_group_info` | Group metadata & participants |
-| `manage_group` | Create/update/leave groups and manage members/admins |
-| `create_poll` | Create poll in chat |
-
-### Presence & Profile
-| Tool | Description |
-|------|-------------|
-| `set_presence` | Set online/offline status |
-| `subscribe_presence` | Subscribe to contact's presence |
-| `get_profile_picture` | Get profile picture URL |
-| `get_blocklist` | List blocked users |
-| `manage_blocklist` | Block/unblock users |
-
-### Newsletters (Channels)
-| Tool | Description |
-|------|-------------|
-| `manage_newsletter` | Follow, unfollow, or create channels |
-
-## Design Philosophy: Lean Transport Primitives
-
-`whatsapp-mcp-extended` is engineered according to the **Unix Philosophy**:
-* **Do One Thing Well:** Be a rock-solid, production-grade transport layer to WhatsApp (socket lifecycle, messaging CRUD, media downloads, reactions, group administration, webhooks, and safety allowlists).
-* **Composable Primitives:** High-level AI features (voice-to-text transcription, vector database semantic recall, LLM summarizers) are kept modular. `whatsapp-mcp-extended` returns clean, raw media file paths (`download_media`) and message arrays (`list_messages`) so AI agents (Claude Code, Cursor, OpenCode, Codex) can chain them with specialized sidecars or plugins.
-
-### 🔌 Plugins & Extensions
-
-Reference plugins and recipes are available in the [`plugins/`](plugins/) directory:
-- **`plugins/transcribe_voice_notes.py`**: Local voice note transcription using `mlx-whisper` or Whisper.
-- **`plugins/semantic_recall.py`**: Multilingual semantic search over message history using `sentence-transformers`.
-- **All-in-One Fork:** Users looking for a pre-packaged ML bundle can check out [@simonseifert's fork](https://github.com/simonseifert/whatsapp-mcp-pro).
-
-Response data prioritizes **complete context with minimal interpretation**. See [METADATA_PHILOSOPHY.md](./docs/METADATA_PHILOSOPHY.md) for:
-
-- Why we include raw data instead of pre-computed signals
-- How we reduce token waste for consuming LLMs
-- Response structure examples (Messages, Chats, Contacts)
-- Design rules: raw facts, countable metrics, exclude nulls
-
-**TL;DR:** Get all contact info in one response instead of repeated queries. LLM infers tone, urgency, relationships from raw data + metrics.
-
-## Webhook System
-
-Real-time HTTP webhooks for incoming messages with:
-- **Triggers**: all, chat_jid, sender, keyword, media_type
-- **Matching**: exact, contains, regex
-- **Security**: HMAC-SHA256 signatures
-- **Retry**: Exponential backoff
-
-Access the web UI at `http://localhost:8090`
-
-## Development
-
-### Manual Setup
-
-```bash
-# Bridge (Go 1.25+)
-cd whatsapp-bridge && go run main.go
-
-# MCP Server (Python 3.11+)
-cd whatsapp-mcp-server && uv sync && uv run python main.py
-
-# Web UI
-cd whatsapp-web-ui && npm install && npm run dev
-```
-
-### Pre-build Checks
-
-```bash
-cd whatsapp-mcp-server
-uv run python check.py  # Catches errors before docker build
-```
-
-### Updating whatsmeow
-
-When you see `Client outdated (405)` errors:
-
-```bash
-cd whatsapp-bridge
-go get -u go.mau.fi/whatsmeow@latest
-go mod tidy
-docker-compose build whatsapp-bridge
-docker-compose up -d whatsapp-bridge
-```
-
-## Ports
-
-| Service | Port | Description |
+| Toolset | Tool | Description |
 |---------|------|-------------|
-| Bridge API | 8080 (→8180) | REST API |
-| MCP Server | 8081 | Streamable HTTP transport |
-| Web UI | 8090 | Chat, contacts, and webhook management |
+| `core` | `list_chats` <kbd>read</kbd> | List chats, sorted by activity or name |
+| `core` | `get_chat` <kbd>read</kbd> | Metadata of one chat by JID |
+| `core` | `list_messages` <kbd>read</kbd> | Search and filter messages, optionally with surrounding context |
+| `core` | `get_message_context` <kbd>read</kbd> | Messages before and after a given message |
+| `core` | `search_contacts` <kbd>read</kbd> | Find contacts by name or number |
+| `core` | `list_all_contacts` <kbd>read</kbd> | List all contacts |
+| `core` | `get_contact_context` <kbd>read</kbd> | Contact details, related chats and last interaction in one call |
+| `core` | `get_direct_chat_by_contact` <kbd>read</kbd> | Find the one-to-one chat for a phone number |
+| `core` | `get_group_info` <kbd>read</kbd> | Group name, topic and participants |
+| `core` | `get_profile_picture` <kbd>read</kbd> | Profile picture URL for a user or group |
+| `send` | `send_message` <kbd>write</kbd> | Send text, with optional replies (`quoted_message_id`) and mentions |
+| `send` | `send_reaction` <kbd>write</kbd> | React to a message with an emoji |
+| `send` | `create_poll` <kbd>write</kbd> | Send a poll |
+| `media` | `send_file` <kbd>write</kbd> | Send an image, video or document (from a server path or base64) |
+| `media` | `send_audio_message` <kbd>write</kbd> | Send a voice note |
+| `media` | `download_media` <kbd>read</kbd> | Download media from a message; images are also returned inline |
+| `history` | `request_history` <kbd>write</kbd> | Ask the phone for older messages of a chat |
+| `message_admin` | `edit_message` <kbd>write</kbd> | Edit a message you sent |
+| `message_admin` | `delete_message` <kbd>destructive</kbd> | Delete (revoke) a message |
+| `message_admin` | `mark_read` <kbd>write</kbd> | Mark messages as read, or as played for voice notes |
+| `contacts_write` | `manage_nickname` <kbd>write</kbd> | Set, get, remove or list local nicknames |
+| `groups` | `manage_group` <kbd>destructive</kbd> | Create, update, leave, and manage members and admins |
+| `presence` | `set_presence` <kbd>write</kbd> | Set yourself online or offline |
+| `presence` | `subscribe_presence` <kbd>write</kbd> | Subscribe to a contact's presence |
+| `account_admin` | `get_blocklist` <kbd>read</kbd> | List blocked users |
+| `account_admin` | `manage_blocklist` <kbd>destructive</kbd> | Block or unblock users |
+| `newsletter` | `manage_newsletter` <kbd>destructive</kbd> | Follow, unfollow or create channels |
+
+Tool responses carry raw, complete data (senders, timestamps, quoted messages, media info) and leave the interpretation to the assistant.
+See [docs/response-design.md](docs/response-design.md).
+
+## Web panel
+
+Open **<http://127.0.0.1:8090>**. Sign in with `WEB_UI_USERNAME` and `WEB_UI_PASSWORD`.
+
+- **Pairing:** link a device with a phone code, and watch connection and sync status.
+- **Settings:** account, **active sessions** (who is signed in, from which browser; end any of them) and appearance.
+- **Webhooks:** create, test, enable and inspect webhooks.
+
+Sessions are stored on the server and the browser holds only an `HttpOnly` cookie, so nothing sensitive sits in the browser's storage.
+See [docs/authentication.md](docs/authentication.md).
 
 ## Configuration
 
-Environment variables for the bridge (set in `.env` or `docker-compose.yaml`):
+Everything is configured through environment variables in `.env`. The essentials:
 
 | Variable | Default | Description |
-|---|---|---|
-| `API_KEY` | *(required)* | Bearer token for all authenticated API calls |
-| `PRESENCE_PING_ENABLED` | `true` | Set `false` to stop broadcasting "online" to contacts |
-| `PRESENCE_PING_INTERVAL` | `20m` | How often to ping presence. Accepts Go duration strings (`20m`, `1h`). Keep ≥20m to avoid bot fingerprinting |
-| `HISTORY_SYNC_DAYS_LIMIT` | `365` | Days of history to sync on first link |
-| `HISTORY_SYNC_SIZE_MB` | `5000` | Max history sync size |
-| `STORAGE_QUOTA_MB` | `10240` | Device storage quota |
-| `API_PORT` | `8080` | Bridge HTTP port (internal) |
+|----------|---------|-------------|
+| `API_KEY` | *(required)* | Secret for the bridge API |
+| `WEB_UI_USERNAME`, `WEB_UI_PASSWORD` | *(required)* | Web panel login |
+| `WEB_UI_SESSION_TTL` | `24h` | Panel session inactivity timeout |
+| `HISTORY_SYNC_DAYS_LIMIT` | `365` | Days of history to request when pairing |
+| `WHATSAPP_MCP_TOOLSETS` | `all` | Which toolsets to expose |
+| `WHATSAPP_ALLOWLIST_JIDS` | *(none)* | Only allow sending to these numbers or JIDs |
+| `ANTIBAN_ENABLED` | `false` | Human-like send delays and warm-up ramp |
 
-## Quick Commands
+The full reference, with every variable and the ports, is in [docs/configuration.md](docs/configuration.md).
 
-After running `setup.ps1` once, use the Makefile for day-to-day operations:
+| Service | Address |
+|---------|---------|
+| Web panel | `http://127.0.0.1:8090` |
+| MCP server | `http://127.0.0.1:8081/mcp` |
+| Bridge API | `http://127.0.0.1:8180` |
 
-```bash
-make status          # check connection state (connected, needs_pairing, jid)
-make pair PHONE=+60123456789   # pair via 8-digit phone code — no QR scan needed
-make pairing-status  # check pairing code progress
-make reconnect       # force reconnect (no re-pairing)
-make logs            # tail bridge logs
-make sync-venv       # re-sync Python venv (fix missing module errors)
-make open-ui         # open web UI in browser (QR scan, webhooks, contacts)
-```
-
-## Session Reliability
-
-**Session lifetime rules** (WhatsApp-enforced, cannot be changed):
-- Primary phone must connect to WhatsApp at least every **14 days**
-- The bridge companion device must be active at least every **30 days**
-- WebSocket idle disconnects after ~30 min (auto-reconnects, no re-pairing needed)
-
-**What causes permanent logout** (requires re-scanning QR):
-- Phone offline >14 days
-- Manual unlink from phone (Settings → Linked Devices)
-- WhatsApp detects suspicious activity / protocol fingerprinting
-- WhatsApp app update that forces re-authentication
-
-**Account risk:** This is a third-party bridge using an unofficial API. Use a **dedicated non-personal number**. WhatsApp has been aggressively detecting and banning automation tools since 2025. For business-critical use, the [WhatsApp Business API](https://developers.facebook.com/docs/whatsapp/cloud-api) is the only compliant path.
-
-**If the bridge goes unhealthy** (needs re-pairing):
+### Everyday commands
 
 ```bash
-make status          # check: needs_pairing=true means re-pair required
-make pair PHONE=+60123456789   # preferred: 8-digit code, no QR scan
-# or: open http://127.0.0.1:8090 and scan QR
+docker compose up -d --build     # start, or rebuild after changes
+docker compose logs -f whatsapp-bridge
+docker compose down              # stop (your data stays in ./store)
+make status                      # connection state
+make reconnect                   # reconnect without pairing again
 ```
 
-You can also configure a webhook to receive `logged_out` events so you're alerted immediately when the session is revoked.
+Run `make help` for the rest.
+
+## Security and privacy
+
+- **Local first.** Ports are published on `127.0.0.1` only. Messages and the WhatsApp session live in `./store` on your machine.
+- **Authenticated.** The bridge API needs an API key or a panel session; the panel uses `HttpOnly`, `SameSite=Strict` cookies, CSRF checks and login throttling.
+- **The assistant sees what it reads.** When a tool returns messages, that text is sent to your AI provider as part of the conversation. Use narrow toolsets, and do not connect this to an assistant you do not trust with that data.
+- **Prompt injection is real.** Anyone who can message you can put text in front of your assistant. Keep approval on for write tools.
+- **The MCP endpoint has no login.** It is reachable only from your machine, but any local program can use it. See the [known limitations](SECURITY.md#known-limitations).
+- **Your data is not encrypted at rest.** Use full-disk encryption and never share or commit `store/` or `.env`.
+
+Read the full [security policy](SECURITY.md) and its [hardening checklist](SECURITY.md#hardening-checklist).
 
 ## Troubleshooting
 
-### Bridge needs re-pairing after restart
-
-The bridge stores credentials in `store/whatsapp.db`. If that file exists but the bridge still shows QR, WhatsApp revoked the session server-side (check your phone → Settings → Linked Devices). Re-pair using `make pair PHONE=+60...` or open `http://127.0.0.1:8090`.
-
-### Messages Not Delivering
-
-If API returns success but messages show single checkmark:
+<details>
+<summary><b>The panel says it cannot reach the bridge</b></summary>
 
 ```bash
-docker-compose restart whatsapp-bridge
-docker-compose logs --tail=10 whatsapp-bridge
-# Should see: "✓ Connected to WhatsApp!"
-```
-
-### QR Code Issues
-
-```bash
-# Option 1: phone number code (no QR scan needed)
-make pair PHONE=+60123456789
-
-# Option 2: scan QR via web UI
-open http://127.0.0.1:8090
-
-# Option 3: terminal QR
-docker-compose logs -f whatsapp-bridge
-```
-
-### MCP server fails to start (missing module)
-
-```bash
-make sync-venv   # re-runs uv sync in whatsapp-mcp-server/
-```
-
-### Check bridge health
-
-```bash
+docker compose ps
+docker compose logs --tail 50 whatsapp-bridge
 curl http://127.0.0.1:8180/api/health
-# connected: true/false
-# needs_pairing: true means QR/code scan required (not just a reconnect)
-# disconnected_for: how long it's been offline
 ```
 
-## Credits
+`/api/health` reports `connected` and `needs_pairing`.
 
-**Fork chain:**
-- [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp) - Original MCP server (12 tools)
-- [AdamRussak/whatsapp-mcp](https://github.com/AdamRussak/whatsapp-mcp) - Added webhooks, container split, webhook UI
-- This repo - Added reactions, edit/delete, groups, polls, presence, newsletters, and a curated MCP tool surface
+</details>
 
-**Libraries:**
-- [whatsmeow](https://github.com/tulir/whatsmeow) - Go WhatsApp Web API
-- [FastMCP](https://github.com/jlowin/fastmcp) - Python MCP SDK
+<details>
+<summary><b>I need to pair again, or WhatsApp shows the device as logged out</b></summary>
 
-### Community Acknowledgements
+WhatsApp ends the link if the phone stays offline for more than about 14 days, if you unlink it under *Linked devices*, or if it detects suspicious behaviour.
+Check `make status`: `needs_pairing: true` means you must pair again from the panel or with `make pair PHONE=...`.
 
-Several forks independently solved real problems and their ideas have been incorporated into this repo. Credit where it's due:
+</details>
 
-| Contributor | What they figured out |
-|---|---|
-| [simonseifert](https://github.com/simonseifert) | Optional on-device voice transcription (`mlx-whisper`) & multilingual semantic search (`sentence-transformers`); `direct_path` DB column tracking for CDN fallback; inline `Image` content blocks |
-| [bitterdev](https://github.com/bitterdev) | WhatsApp LID addressing resolution (`GetAltJID()`), mapping `<id>@lid` recipients to phone JIDs to prevent server error 463 |
-| [domdomegg](https://github.com/domdomegg) | Security scan workflow fixes and `.gitleaks.toml` allowlist configuration |
-| [laudite](https://github.com/laudite/whatsapp-mcp-extended) | Media captions in `ExtractTextContent()`; quoted/reply context in webhooks; `@mention` auto-detection |
-| [kasperpeulen](https://github.com/kasperpeulen/whatsapp-mcp-extended) | Contact name resolution priority chain (`FullName > PushName > FirstName > Business`) |
-| [Coriatel](https://github.com/Coriatel/whatsapp-mcp-extended) | First working `/api/download` implementation with manual HKDF/AES-CBC decryption |
-| [jedijashwa](https://github.com/jedijashwa/whatsapp-mcp-extended) | Reactions silently failing fix (wrong sender JID lookup); extended MIME type support |
-| [slarrain](https://github.com/slarrain/whatsapp-mcp-extended) | LID JID normalization — diagnosed conversation-splitting bug |
+<details>
+<summary><b>I want more (or less) history</b></summary>
 
-If you've forked this repo and built something useful, open a PR or issue — good ideas deserve to flow upstream.
+`HISTORY_SYNC_DAYS_LIMIT` only applies while pairing. To change it, unlink the device on your phone, delete `store/whatsapp.db`, set the new value and pair again.
+WhatsApp decides what it sends, so the number is a request, not a guarantee. For one chat you can ask for older messages with the `request_history` tool.
+See [docs/history-sync.md](docs/history-sync.md).
 
-## License
+</details>
 
-MIT License - see [LICENSE](LICENSE) file.
+<details>
+<summary><b>Messages show a single tick or do not deliver</b></summary>
+
+```bash
+docker compose restart whatsapp-bridge
+docker compose logs --tail 10 whatsapp-bridge      # look for "Connected to WhatsApp"
+```
+
+</details>
+
+<details>
+<summary><b>The bridge crashes with <code>SIGBUS</code> right after first start on macOS</b></summary>
+
+This can happen once on Docker Desktop while the database files are first created on the bind mount. The container restarts by itself and runs normally afterwards.
+
+</details>
+
+<details>
+<summary><b>The web panel keeps sending me to the sign-in page</b></summary>
+
+Sessions are held in memory and end when the bridge restarts or after `WEB_UI_SESSION_TTL` without use. Sign in again. If sign-in fails, check the username and
+password in `.env`; after five failures you must wait a few minutes.
+
+</details>
+
+## Development
+
+```bash
+# Bridge (Go 1.25+)
+cd whatsapp-bridge && go test -race ./...
+
+# MCP server (Python 3.11+, uv)
+cd whatsapp-mcp-server && uv sync --all-extras && uv run python check.py && uv run pytest
+
+# Web panel (Node 20+)
+cd whatsapp-web-ui && npm ci && npm run dev
+```
+
+Code is copied into the images, so after a change rebuild the service: `docker compose up -d --build <service>`.
+Details, code style and how to add a tool are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Roadmap
+
+Next up: authentication for the MCP endpoint, local hybrid search (exact terms plus meaning, entirely on your machine), and persistent panel sessions.
+See [ROADMAP.md](ROADMAP.md) and the [changelog](CHANGELOG.md).
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
+Report security problems privately, following [SECURITY.md](SECURITY.md).
+
+## License and commercial use
+
+This project is **source-available**, not open source. It is licensed under the
+[**PolyForm Noncommercial License 1.0.0**](LICENSE).
+
+| You want to... | Do you need a license? |
+|----------------|------------------------|
+| Use it for yourself, at home, for hobby projects, study or research | **No.** Free under the license |
+| Use it in a charity, school, university, public research body or government institution | **No.** Free under the license |
+| Use it inside a company, or for a client | **Yes.** Commercial license required |
+| Offer it, or something built on it, as a product or service | **Yes.** Commercial license required |
+| Bundle it in a commercial product | **Yes.** Commercial license required |
+
+> **Want to use WhatsApp MCP commercially? Get in touch:**
+> **Matheus Pina, [mathpinab@gmail.com](mailto:mathpinab@gmail.com)**
+> Tell me who you are, what you want to build and roughly how many users or accounts it will serve.
+
+More in [COMMERCIAL.md](COMMERCIAL.md).
+
+Part of this codebase descends from MIT-licensed projects, and their notices are preserved. See [NOTICE.md](NOTICE.md) for which terms cover what.
+
+## Disclaimer
+
+- **Not affiliated.** This project is independent. It is not affiliated with, endorsed by or sponsored by WhatsApp or Meta Platforms, Inc. WhatsApp is a trademark of Meta.
+- **Unofficial protocol.** It uses the WhatsApp Web protocol without WhatsApp's permission. That may violate WhatsApp's Terms of Service, and WhatsApp can limit or **ban accounts** that use unofficial clients. Read-only use lowers the risk but does not remove it. For business messaging, use the official [WhatsApp Business Platform](https://developers.facebook.com/docs/whatsapp/cloud-api).
+- **Your responsibility.** You are responsible for how you use it: for consent of the people whose messages you process, for privacy laws that apply to you (such as the GDPR or the LGPD), and for what your AI assistant does with its access. Do not use it for spam, bulk or unsolicited messaging, harassment, or surveillance.
+- **No warranty.** The software is provided "as is", without warranty of any kind, and the author is not liable for any damage, data loss, account restriction or other consequence of using it. See the [LICENSE](LICENSE).
+- **AI can be wrong.** An assistant may misread messages or take an action you did not intend. Review what it does, especially before it sends or deletes anything.
+
+## Acknowledgements
+
+WhatsApp MCP builds on [whatsmeow](https://github.com/tulir/whatsmeow) and on a chain of open source projects:
+[lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp), [AdamRussak/whatsapp-mcp](https://github.com/AdamRussak/whatsapp-mcp)
+and [FelixIsaac/whatsapp-mcp-extended](https://github.com/FelixIsaac/whatsapp-mcp-extended), plus ideas and fixes from many community forks.
+Full credits are in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md), and license details in [NOTICE.md](NOTICE.md).
+
+<div align="center">
+
+<sub>Copyright © 2026 Matheus Pina · [PolyForm Noncommercial 1.0.0](LICENSE) · Commercial licensing: <a href="mailto:mathpinab@gmail.com">mathpinab@gmail.com</a></sub>
+
+</div>

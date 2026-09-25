@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         ### 📐 Design Philosophy Reminder
-        `whatsapp-mcp-extended` focuses strictly on **Lean Transport Primitives** for WhatsApp (socket lifecycle, messaging CRUD, media downloads, reactions, group management, presence, webhooks, and safety allowlists). Heavy ML features belong in `plugins/` or dedicated agent sidecars.
+        WhatsApp MCP focuses strictly on **Lean Transport Primitives** for WhatsApp (socket lifecycle, messaging CRUD, media downloads, reactions, group management, presence, webhooks, and safety allowlists). Heavy processing (transcription, embeddings, summarization) is better built as a separate service or MCP server.
   - type: textarea
     id: feature-description
     attributes:

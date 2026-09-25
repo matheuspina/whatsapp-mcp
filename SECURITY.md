@@ -1,44 +1,56 @@
 # Security Policy
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-To report a security vulnerability privately, use [GitHub's private vulnerability reporting](https://github.com/FelixIsaac/whatsapp-mcp-extended/security/advisories/new).
+Please report security problems **privately**, not in a public issue.
 
-Alternatively email: `felix@noversetech.com` — include a description, reproduction steps, and impact.
+- Use GitHub's [private vulnerability reporting](https://github.com/matheuspina/whatsapp-mcp/security/advisories/new), or
+- email **mathpinab@gmail.com** with a description, steps to reproduce and the impact you see.
 
-Expected response within **48 hours**. Public disclosure after fix is shipped.
+You can expect an acknowledgement within a few days. Once a fix is released, the issue can be disclosed publicly.
+This is a personal project maintained by one person, so there is no formal SLA.
 
-## Security Fixes vs Upstream
+## Supported versions
 
-This fork (`FelixIsaac/whatsapp-mcp-extended`) fixes all known security issues from the abandoned upstream `lharries/whatsapp-mcp`:
+Only the latest release receives security fixes. Please update before reporting.
 
-| CVE / Issue | Upstream | This fork |
-|-------------|----------|-----------|
-| **Path traversal on `/api/send`** — `mediaPath` passed unsanitized to `os.ReadFile()` (Issue #241) | Vulnerable | Fixed — path validated against allowed directories |
-| **Bridge binds to `0.0.0.0` by default** — unauthenticated `/api/send` and `/api/download` exposed on all LAN interfaces (Issue #215) | Vulnerable | Fixed — defaults to `127.0.0.1`; set `BRIDGE_HOST=0.0.0.0` to opt in |
-| **No API key authentication** — any process on localhost can send WhatsApp messages | Vulnerable | Fixed — `API_KEY` required; all bridge endpoints enforce `X-API-Key` header |
-| **MCPSafe grade D (67/100), 13 high-severity findings** (Issue #247) | Unfixed | Addressed — above fixes resolve the top findings |
+## Threat model
 
-## Threat Model
-
-whatsapp-mcp-extended is designed for **local/personal use** (single user, trusted machine). It is **not** designed for multi-tenant or public internet deployments without additional hardening.
+WhatsApp MCP is built for **personal use on a machine you trust**, by one person, for their own account.
+It is **not** designed for multi-tenant use or exposure to the public internet without extra hardening.
 
 ### What is protected
-- Bridge API bound to `127.0.0.1` — not reachable from network by default
-- All bridge endpoints require `X-API-Key` header — prevents unauthorized tool calls from other local processes
-- Docker services communicate over an isolated internal network (`whatsapp_internal`)
-- All Docker ports explicitly mapped to `127.0.0.1:PORT` — no accidental LAN exposure
 
-### What is out of scope
-- **Prompt injection via incoming messages** — an attacker who can send you WhatsApp messages may craft a message that influences Claude's behavior. Mitigate at the agent layer (human approval before destructive actions).
-- **Malicious media files** — downloaded media is written to the local filesystem. Scan before opening untrusted files.
-- **WhatsApp account bans** — the anti-ban interceptor reduces risk but does not eliminate it. Do not use for mass messaging.
+- **Local-only network exposure.** The Docker Compose file publishes every port on `127.0.0.1` only (bridge API `8180`, MCP server `8081`, web panel `8090`), and the services talk over an isolated internal network.
+- **Bridge API authentication.** Every bridge endpoint needs either the `X-API-Key` header (constant-time comparison; used by the MCP server and scripts) or a valid web panel session. The bridge refuses to start without `API_KEY` unless you explicitly disable this for development.
+- **Web panel login.** Username and password come from `.env`. Sessions live on the server, and the browser only receives an `HttpOnly`, `SameSite=Strict` cookie that page scripts cannot read. State-changing requests authenticated by cookie must come from an allowlisted `Origin` (CSRF defence). Failed logins are throttled (5 failures per 5 minutes per address). Active sessions can be listed and ended from the panel. Details in [docs/authentication.md](docs/authentication.md).
+- **Secrets stay out of logs.** The bridge does not print the API key.
+- **Hardening inherited from upstream.** Media paths are validated against allowed directories (symlinks resolved), webhook URLs are checked to block private-network targets (SSRF), webhook payloads are signed with HMAC-SHA256, the API is rate limited, and sensitive events go to an audit log. An optional allowlist (`WHATSAPP_ALLOWLIST_JIDS`) limits who the bridge can send to.
 
-## Supported Versions
+### Known limitations
 
-Only the latest release is supported. Upgrade to the latest version before reporting.
+These are real. Read them before you connect an AI agent to your account.
 
-| Version | Supported |
-|---------|-----------|
-| 0.3.x   | ✅ Yes |
-| < 0.3   | ❌ No |
+- **The MCP endpoint has no authentication.** The MCP server (`http://127.0.0.1:8081/mcp`) accepts connections from any process on the same machine, and its tools include sending and deleting messages. The `127.0.0.1` binding keeps it off the network, but any local program can use it. Mitigate with a smaller toolset (for example `WHATSAPP_MCP_TOOLSETS=core`), the send allowlist, and by keeping human approval switched on for write tools in your AI client.
+- **Prompt injection.** Anyone who can message you can put text in front of your AI agent. Do not let an agent send messages, delete anything or call other connected tools without your approval. Avoid using this MCP in the same session as other connectors that can send email or messages unattended.
+- **Data at rest is not encrypted.** Messages, contacts and the WhatsApp session live in plain SQLite files under `store/`, and received media is downloaded to disk. Use full-disk encryption (FileVault, BitLocker, LUKS) and treat `store/` like a password vault: never commit it or share it.
+- **Secrets in `.env`.** `API_KEY` and `WEB_UI_PASSWORD` are stored in plain text in `.env`, which is git-ignored. Keep it readable only by you (`chmod 600 .env`), and use strong values.
+- **Sessions are in memory.** Restarting the bridge signs everyone out.
+- **No TLS out of the box.** Traffic stays on your machine. If you expose the panel beyond `127.0.0.1`, put a TLS-terminating reverse proxy in front (the bridge honours `X-Forwarded-Proto: https` for the cookie `Secure` flag) and restrict who can reach it.
+- **Inside Docker, client addresses are the gateway's.** Session addresses and login throttling use the Docker network gateway rather than the browser's real address.
+- **Malicious media.** Downloaded files are written to the local filesystem. Scan untrusted files before opening them.
+
+### Account risk
+
+This project uses the unofficial WhatsApp Web protocol. That is against WhatsApp's terms of service, and WhatsApp can restrict or ban accounts that use it. Read-only use lowers the risk but does not remove it. Do not use it for bulk or unsolicited messaging, and prefer a number you can afford to lose. You use it at your own risk. See the disclaimer in the [README](README.md#disclaimer).
+
+## Hardening checklist
+
+- [ ] Set a long random `API_KEY` and a strong `WEB_UI_PASSWORD` (`openssl rand -hex 32`, `openssl rand -base64 18`).
+- [ ] `chmod 600 .env`, and never commit `.env` or `store/`.
+- [ ] Enable full-disk encryption.
+- [ ] Expose only the toolsets you need with `WHATSAPP_MCP_TOOLSETS`.
+- [ ] Set `WHATSAPP_ALLOWLIST_JIDS` if the agent should only message specific people or groups.
+- [ ] Require approval for write tools in your AI client.
+- [ ] Keep the ports on `127.0.0.1`.
+- [ ] Rebuild regularly to pick up dependency updates (`docker compose build --pull`).

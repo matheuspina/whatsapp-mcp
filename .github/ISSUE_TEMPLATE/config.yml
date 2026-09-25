@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/matheuspina/whatsapp-mcp/security/advisories/new
+    about: Please report security problems privately, not in a public issue.
+  - name: Commercial use and licensing
+    url: https://github.com/matheuspina/whatsapp-mcp/blob/main/COMMERCIAL.md
+    about: Using WhatsApp MCP in a business, for a client, or in a product needs a commercial license. Contact mathpinab@gmail.com.
