@@ -487,7 +487,7 @@ Part of this codebase descends from MIT-licensed projects, and their notices are
 
 WhatsApp MCP builds on [whatsmeow](https://github.com/tulir/whatsmeow) and on a chain of open source projects:
 [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp), [AdamRussak/whatsapp-mcp](https://github.com/AdamRussak/whatsapp-mcp)
-and [FelixIsaac/whatsapp-mcp-extended](https://github.com/FelixIsaac/whatsapp-mcp-extended), plus ideas and fixes from many community forks.
+and [FelixIsaac/whatsapp-mcp-extended](https://github.com/FelixIsaac/whatsapp-mcp-extended).
 Full credits are in [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md), and license details in [NOTICE.md](NOTICE.md).
 
 <div align="center">

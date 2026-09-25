@@ -29,8 +29,7 @@ This repository descends from a chain of open source forks. Their commit history
 3. [FelixIsaac/whatsapp-mcp-extended](https://github.com/FelixIsaac/whatsapp-mcp-extended). Added reactions, editing and deleting messages,
    group management, polls, presence, newsletters, the curated MCP tool surface and the security hardening this project builds on.
 
-Ideas and fixes from the wider community that reached this codebase through those projects are credited in
-[`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md).
+Other credits (libraries and protocols) are in [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md).
 
 ## MIT License (upstream notice)
 
