@@ -64,7 +64,7 @@ from whatsapp import update_group as whatsapp_update_group
 _INLINE_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
 # Initialize FastMCP server
-mcp = FastMCP("whatsapp-extended")
+mcp = FastMCP("whatsapp-mcp")
 
 ALL_TOOLSETS = {
     "core",
