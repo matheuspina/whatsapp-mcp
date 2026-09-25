@@ -73,7 +73,10 @@ RUN mkdir -p /app/store /app/media \
 
 EXPOSE 8080
 
+# Checks that nginx serves the panel, not /api/health: that endpoint answers 503 whenever WhatsApp is not connected
+# (for example before pairing), which would mark the container unhealthy and make the proxy drop it, so the panel
+# needed to pair would be unreachable. A bridge or MCP crash needs no probe: entrypoint.sh exits when any process does.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD wget -qO /dev/null http://127.0.0.1:8080/api/health || exit 1
+    CMD wget -qO /dev/null http://127.0.0.1:8080/login/ || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]

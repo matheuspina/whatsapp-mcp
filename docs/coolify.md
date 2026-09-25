@@ -46,6 +46,9 @@ addresses itself (`API_PORT`, `API_BIND_HOST`, `HOST`, `PORT`, `BRIDGE_HOST`, `M
   the container logs a warning and the device has to be paired again after each redeploy.
 - **MCP is off without `MCP_PUBLIC_URL`.** The endpoint has no login of its own; with OAuth on, clients sign in with the panel
   credentials (see [mcp-oauth.md](mcp-oauth.md)). It is never exposed publicly without it.
+- **Health check.** The image checks `/login/` (nginx up), not `/api/health`, which answers 503 while WhatsApp is not connected,
+  for example before pairing. With that endpoint the proxy would drop the container and the pairing page would be unreachable.
+  If you set a health check in Coolify, use `/login/` too.
 - **Redeploys.** If Coolify starts the new container before stopping the old one, both use the same WhatsApp session and
   volume and WhatsApp disconnects one of them. If you see that, turn the health check off in Coolify so it stops the old container first.
 - **The search indexer is not included.** It is the fourth service in `docker-compose.yaml` and stays a separate container.
