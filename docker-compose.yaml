@@ -108,6 +108,34 @@ services:
     networks:
       - whatsapp_internal
 
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    working_dir: /app/whatsapp-mcp-server
+    entrypoint: ["python", "-m", "search.indexer"]
+    volumes:
+      - ./store:/app/store:ro          # messages.db / whatsapp.db, read-only: the indexer never writes to the bridge store
+      - ./store-index:/app/index       # index.db lives in its own writable location instead
+    environment:
+      - TZ=UTC
+      - INDEX_DB_PATH=/app/index/index.db
+      - INDEX_POLL_SECONDS=${INDEX_POLL_SECONDS:-20}
+    depends_on:
+      whatsapp-bridge:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - whatsapp_internal
+
 networks:
   whatsapp_internal:
     driver: bridge
