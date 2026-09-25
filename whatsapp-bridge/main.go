@@ -95,6 +95,11 @@ func main() {
 
 	// Security: Require API_KEY in production
 	apiKey := os.Getenv("API_KEY")
+	if config.IsPlaceholder(apiKey) {
+		logger.Errorf("SECURITY: API_KEY is still the example value from .env.example")
+		logger.Errorf("Generate a real one with: openssl rand -hex 32")
+		os.Exit(1)
+	}
 	if apiKey == "" {
 		if os.Getenv("DISABLE_AUTH_CHECK") != "true" {
 			logger.Errorf("SECURITY: API_KEY environment variable is required")
@@ -108,6 +113,11 @@ func main() {
 
 	// Load configuration
 	cfg := config.NewConfig()
+	if config.IsPlaceholder(cfg.WebUIPassword) {
+		logger.Errorf("SECURITY: WEB_UI_PASSWORD is still the example value from .env.example")
+		logger.Errorf("Choose a strong password, for example: openssl rand -base64 18")
+		os.Exit(1)
+	}
 
 	// Initialize database
 	messageStore, err := database.NewMessageStore()

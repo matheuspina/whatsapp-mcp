@@ -41,6 +41,13 @@ type Config struct {
 	WebUISessionTTL time.Duration // WEB_UI_SESSION_TTL (default 24h, sliding expiry)
 }
 
+// IsPlaceholder reports whether a secret still holds the example value shipped in
+// .env.example (anything starting with "CHANGEME"). Such values are public, so they
+// must never be accepted as real credentials.
+func IsPlaceholder(v string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(v)), "CHANGEME")
+}
+
 // NewConfig creates a new configuration with default values
 func NewConfig() *Config {
 	cfg := &Config{
