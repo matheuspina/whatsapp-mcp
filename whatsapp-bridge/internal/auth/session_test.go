@@ -107,7 +107,9 @@ func TestListHidesTokenSortsNewestFirstAndSkipsExpired(t *testing.T) {
 
 func TestPurgeExpired(t *testing.T) {
 	m, now := newTestManager(time.Hour)
-	m.Create("admin", "", "")
+	if _, err := m.Create("admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
 	*now = now.Add(2 * time.Hour)
 	m.purgeExpired()
 	if len(m.byToken) != 0 || len(m.tokenOf) != 0 {
