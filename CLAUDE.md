@@ -17,7 +17,7 @@ Browser ──▶ web-ui (nginx, host :8090) ──REST + session cookie──�
 
 - **`whatsapp-bridge/` (Go).** `internal/api` (HTTP handlers, middleware, auth handlers), `internal/auth` (panel sessions), `internal/whatsapp` (client wrapper, messages, media), `internal/webhook`, `internal/database` (SQLite), `internal/config`, `internal/antiban`, `internal/security` (audit log), `internal/types`.
 - **`whatsapp-mcp-server/` (Python).** `main.py` registers tools and toolsets (stdio, SSE or streamable HTTP via `MCP_TRANSPORT`); `whatsapp.py` holds the client functions; `lib/` has `models`, `database`, `bridge`, `utils`. `gradio-main.py` is an optional Gradio variant.
-- **`whatsapp-web-ui/` (Next.js, static export served by nginx).** `src/app` pages (`login`, `pairing`, `settings`, `webhooks`), `src/components`, `src/lib/api.ts` (bridge client), `src/lib/store.ts` (zustand).
+- **`whatsapp-web-ui/` (Next.js, static export served by nginx).** `src/app` pages (`login`, `pairing`, `settings`, `webhooks`, `mcp-clients`), `src/components`, `src/lib/api.ts` (bridge client), `src/lib/store.ts` (zustand).
 
 ## Commands
 

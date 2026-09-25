@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { Link2, LogOut, MessageSquare, Settings, Webhook } from "lucide-react";
+import { Link2, LogOut, MessageSquare, Plug, Settings, Webhook } from "lucide-react";
 import { WhatsAppAPI } from "@/lib/api";
 import { useAuth } from "@/lib/store";
 
@@ -20,6 +20,12 @@ const navItems = [
     href: "/webhooks",
     icon: Webhook,
     description: "Manage webhook endpoints",
+  },
+  {
+    title: "MCP",
+    href: "/mcp-clients",
+    icon: Plug,
+    description: "Connect AI clients",
   },
 ];
 

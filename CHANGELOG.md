@@ -8,6 +8,8 @@ All notable changes to this project are recorded here. The format follows
 Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 
 ### Added
+- MCP tab in the web panel: lists the common MCP clients (Claude, Claude Code, Cursor, VS Code, ChatGPT, Codex,
+  Antigravity, Gemini CLI, Windsurf, Grok) with a connect link or a copyable command and config for each.
 - Local search indexer (Phase 1 of hybrid search): a background service that keeps a keyword-searchable
   SQLite FTS5 index (`store-index/index.db`) in sync with `messages.db`, plus overlapping conversation chunks
   ready for local embeddings in a later phase. Runs as its own `indexer` Compose service, read-only
