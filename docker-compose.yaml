@@ -18,6 +18,11 @@ services:
       - "127.0.0.1:8180:8080"
     volumes:
       - ./store:/app/whatsapp-bridge/store
+    # Pass the whole .env through, so optional bridge settings (ANTIBAN_*, PRESENCE_*,
+    # WHATSAPP_ALLOWLIST_JIDS, CORS_ORIGINS, ...) reach the container. Needs Compose >= 2.24.
+    env_file:
+      - path: .env
+        required: false
     environment:
       - TZ=UTC
       - API_KEY=${API_KEY:?API_KEY is required - see .env.example}
