@@ -4,25 +4,44 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 interface SettingsState {
-  apiKey: string;
   darkMode: boolean;
-  setApiKey: (key: string) => void;
   setDarkMode: (dark: boolean) => void;
 }
 
+// Only appearance is kept in the browser. Credentials are never stored client-side:
+// the session lives on the server and reaches the browser as an HttpOnly cookie.
 export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
-      apiKey: "test_key_for_build_verification_only",
       darkMode: false,
-      setApiKey: (apiKey) => set({ apiKey }),
       setDarkMode: (darkMode) => set({ darkMode }),
     }),
     {
       name: "whatsapp-pairing-settings",
+      version: 1,
+      // v0 also persisted an `apiKey`; drop it so an old key doesn't linger in localStorage.
+      migrate: (persisted) => ({ darkMode: Boolean((persisted as { darkMode?: boolean } | null)?.darkMode) }),
+      partialize: (state) => ({ darkMode: state.darkMode }),
     }
   )
 );
+
+type AuthStatus = "checking" | "authed" | "anon";
+
+interface AuthState {
+  status: AuthStatus;
+  username: string;
+  setAuthed: (username: string) => void;
+  setAnon: () => void;
+}
+
+// Mirrors what the server says about the current session. Holds no secret.
+export const useAuth = create<AuthState>((set) => ({
+  status: "checking",
+  username: "",
+  setAuthed: (username) => set({ status: "authed", username }),
+  setAnon: () => set({ status: "anon", username: "" }),
+}));
 
 type PairingStep = "phone" | "code" | "dashboard";
 

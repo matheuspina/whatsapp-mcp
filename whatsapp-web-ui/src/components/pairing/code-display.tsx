@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Clock, Loader2, CheckCircle, AlertCircle, Smartphone, Copy } from "lucide-react";
 import { WhatsAppAPI, getErrorMessage } from "@/lib/api";
-import { useSettings, usePairing } from "@/lib/store";
+import { usePairing } from "@/lib/store";
 import { toast } from "sonner";
 
 type PairingStatus = "waiting" | "success" | "error" | "expired";
@@ -27,7 +27,6 @@ const statusConfigs: Record<PairingStatus, StatusInfo> = {
 };
 
 export function CodeDisplay() {
-  const { apiKey } = useSettings();
   const { pairingCode, expiresIn, setStep, setJid } = usePairing();
   const [countdown, setCountdown] = useState(expiresIn);
   const [status, setStatus] = useState<PairingStatus>("waiting");
@@ -39,7 +38,7 @@ export function CodeDisplay() {
 
   const checkStatus = useCallback(async () => {
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       const result = await api.getPairingStatus();
 
       if (result.complete) {
@@ -60,7 +59,7 @@ export function CodeDisplay() {
       const msg = getErrorMessage(error);
       console.error("Polling error:", msg);
     }
-  }, [apiKey, setJid, setStep]);
+  }, [setJid, setStep]);
 
   useEffect(() => {
     if (status !== "waiting") return;

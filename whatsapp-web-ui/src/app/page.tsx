@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link2, Webhook, ArrowRight } from "lucide-react";
@@ -11,7 +9,8 @@ export default function Home() {
   return (
     <div className="p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">WhatsApp MCP Extended</h1>
+        <h1 className="text-3xl font-bold">WhatsApp MCP</h1>
+        <p className="text-sm text-muted-foreground mb-2">by Matheus Pina</p>
         <p className="text-muted-foreground mb-8">
           Manage your WhatsApp bridge, device pairing, and webhook configurations
         </p>

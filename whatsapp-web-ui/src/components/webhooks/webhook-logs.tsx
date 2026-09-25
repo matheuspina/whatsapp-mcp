@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { WebhookLog, WhatsAppAPI, getErrorMessage } from "@/lib/api";
-import { useSettings } from "@/lib/store";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,7 +24,6 @@ interface WebhookLogsProps {
 }
 
 export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: WebhookLogsProps) {
-  const { apiKey } = useSettings();
   const [logs, setLogs] = useState<WebhookLog[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -33,7 +32,7 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
 
     setLoading(true);
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       const data = await api.getWebhookLogs(webhookId);
       setLogs(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     } catch (error) {

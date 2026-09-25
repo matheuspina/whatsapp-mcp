@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle, RefreshCw, Settings, Plus, MessageSquare, Clock, AlertTriangle, Loader2, XCircle, WifiOff, Zap } from "lucide-react";
 import { WhatsAppAPI, SyncStatusResponse, ConnectionStatusResponse } from "@/lib/api";
-import { useSettings, usePairing } from "@/lib/store";
+import { usePairing } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 interface DashboardProps {
@@ -15,7 +15,6 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onOpenSettings }: DashboardProps) {
-  const { apiKey } = useSettings();
   const { jid, reset } = usePairing();
   const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
   const [connStatus, setConnStatus] = useState<ConnectionStatusResponse | null>(null);
@@ -24,7 +23,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       const [sync, conn] = await Promise.all([
         api.getSyncStatus(),
         api.getConnectionStatus(),
@@ -36,7 +35,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
     } finally {
       setLoading(false);
     }
-  }, [apiKey]);
+  }, []);
 
   useEffect(() => {
     fetchStatus();
@@ -52,7 +51,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
   const handleReconnect = async () => {
     setReconnecting(true);
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       await api.reconnect();
     } catch (error) {
       console.error("Failed to reconnect:", error);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Webhook, WhatsAppAPI, getErrorMessage } from "@/lib/api";
-import { useSettings } from "@/lib/store";
+
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -21,7 +21,6 @@ import { Plus, RefreshCw, Loader2, Webhook as WebhookIcon } from "lucide-react";
 import { toast } from "sonner";
 
 export function WebhookList() {
-  const { apiKey } = useSettings();
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -34,7 +33,7 @@ export function WebhookList() {
   const loadWebhooks = async () => {
     setLoading(true);
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       const data = await api.getWebhooks();
       setWebhooks(data);
     } catch (error) {
@@ -48,7 +47,7 @@ export function WebhookList() {
 
   useEffect(() => {
     loadWebhooks();
-  }, [apiKey]);
+  }, []);
 
   const handleCreate = () => {
     setEditingWebhook(null);
@@ -63,7 +62,7 @@ export function WebhookList() {
   const handleFormSubmit = async (data: WebhookFormData) => {
     setSubmitting(true);
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       if (editingWebhook) {
         await api.updateWebhook(editingWebhook.id, data);
         toast.success("Webhook updated");
@@ -83,7 +82,7 @@ export function WebhookList() {
 
   const handleToggle = async (id: string, enabled: boolean) => {
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       await api.toggleWebhook(id, enabled);
       toast.success(enabled ? "Webhook enabled" : "Webhook disabled");
       loadWebhooks();
@@ -95,7 +94,7 @@ export function WebhookList() {
 
   const handleTest = async (id: string) => {
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       await api.testWebhook(id);
       toast.success("Test sent successfully");
     } catch (error) {
@@ -114,7 +113,7 @@ export function WebhookList() {
     if (!deleteDialog) return;
 
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       await api.deleteWebhook(deleteDialog.id);
       toast.success("Webhook deleted");
       setDeleteDialog(null);
