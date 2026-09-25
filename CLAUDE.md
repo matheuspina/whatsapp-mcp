@@ -1,246 +1,95 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) when working in this repository. See also [AGENTS.md](AGENTS.md).
 
-## Project Overview
+## Project overview
 
-WhatsApp MCP Server - a Model Context Protocol server enabling AI integration with personal WhatsApp accounts. Containerized microservices architecture with Go bridge, Python MCP server, and web UI.
+WhatsApp MCP is a Model Context Protocol server that gives an AI assistant access to a personal WhatsApp account. It is a Docker Compose stack of three services: a Go bridge, a Python MCP server and a Next.js web panel.
 
 ## Architecture
 
 ```
-┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│   whatsapp-bridge   │     │   whatsapp-mcp      │     │    webhook-ui       │
-│   (Go + whatsmeow)  │◄────│   (Python + MCP)    │     │   (HTML/JS SPA)     │
-│   Port: 8080        │     │   Ports: 8081,8082  │     │   Port: 8089        │
-└─────────────────────┘     └─────────────────────┘     └─────────────────────┘
-         │                           │
-         ▼                           ▼
-    ┌─────────────────────────────────────┐
-    │           SQLite (store/)           │
-    │  messages.db │ whatsapp.db          │
-    └─────────────────────────────────────┘
+AI client ──MCP──▶ whatsapp-mcp (Python, :8081/mcp) ──REST + X-API-Key──▶ whatsapp-bridge (Go, :8080 → host 8180) ◀──▶ WhatsApp
+                          │                                                        │
+                          └──────── read-only SQLite ──▶ store/ (messages.db, whatsapp.db) ◀┘
+Browser ──▶ web-ui (nginx, host :8090) ──REST + session cookie──▶ whatsapp-bridge
 ```
 
-**whatsapp-bridge/** (Go): WhatsApp API connection via whatsmeow, message handling, webhook delivery, REST API
-**whatsapp-mcp-server/** (Python): MCP protocol implementation, message search, media handling, contact management
-**whatsapp-webhook-ui/**: Web interface for webhook configuration
+- **`whatsapp-bridge/` (Go).** `internal/api` (HTTP handlers, middleware, auth handlers), `internal/auth` (panel sessions), `internal/whatsapp` (client wrapper, messages, media), `internal/webhook`, `internal/database` (SQLite), `internal/config`, `internal/antiban`, `internal/security` (audit log), `internal/types`.
+- **`whatsapp-mcp-server/` (Python).** `main.py` registers tools and toolsets (stdio, SSE or streamable HTTP via `MCP_TRANSPORT`); `whatsapp.py` holds the client functions; `lib/` has `models`, `database`, `bridge`, `utils`. `gradio-main.py` is an optional Gradio variant.
+- **`whatsapp-web-ui/` (Next.js, static export served by nginx).** `src/app` pages (`login`, `pairing`, `settings`, `webhooks`), `src/components`, `src/lib/api.ts` (bridge client), `src/lib/store.ts` (zustand).
 
 ## Commands
 
-### Docker (recommended)
 ```bash
-docker network create n8n_n8n_traefik_network  # first time only
-docker-compose up -d                           # start all services
-docker-compose logs -f whatsapp-bridge         # watch for QR code
-docker-compose build                           # rebuild all
-docker-compose build whatsapp-bridge           # rebuild specific
+cp .env.example .env            # set API_KEY, WEB_UI_USERNAME, WEB_UI_PASSWORD
+docker compose up -d --build    # start everything
+docker compose logs -f whatsapp-bridge
+docker compose up -d --build <service>   # rebuild one service after a change (no hot reload)
 ```
 
-**IMPORTANT: No hot-reload** - code is COPY'd into containers at build time. After any code changes:
-```bash
-docker-compose build <service>   # rebuild changed service
-docker-compose up -d <service>   # restart with new image
-```
-
-### Development
-```bash
-# Bridge (Go 1.24+)
-cd whatsapp-bridge && go run main.go
-cd whatsapp-bridge && go test ./...
-
-# MCP Server (Python 3.11+, requires uv)
-cd whatsapp-mcp-server && uv sync
-cd whatsapp-mcp-server && uv run python whatsapp.py
-
-# Webhook UI
-cd whatsapp-webhook-ui && python3 -m http.server 8089
-```
-
-### Pre-build Checks (run BEFORE docker-compose build)
-```bash
-cd whatsapp-mcp-server
-
-# Install dev tools (first time only)
-uv sync --all-extras
-
-# Quick syntax check (~1s) - catches missing imports, syntax errors
-uv run python check.py --quick
-
-# Full check (~5s) - includes ruff linting + mypy type checking
-uv run python check.py
-```
-
-This catches errors like missing imports before waiting 4-5 min for Docker build.
-
-### Updating whatsmeow (when 405 errors appear)
-```bash
-cd whatsapp-bridge
-go get -u go.mau.fi/whatsmeow@latest
-go mod tidy
-```
-
-### Database Migrations (for schema/structure changes)
-
-**IMPORTANT:** When changes affect database schema (new columns, indexes, tables), we provide migration scripts for existing users. Don't rebuild containers from scratch - run migrations on existing databases.
-
-**For existing database (`store/messages.db`):**
+Development without Docker:
 
 ```bash
-# Find latest migration in whatsapp-bridge/migrations/
-ls -la whatsapp-bridge/migrations/
-
-# Run migration (safe - non-destructive, adds only)
-sqlite3 whatsapp-bridge/store/messages.db < whatsapp-bridge/migrations/001_add_metadata_fields.sql
-
-# Verify migration
-sqlite3 whatsapp-bridge/store/messages.db "SELECT name FROM sqlite_master WHERE type='index' ORDER BY name;"
+cd whatsapp-bridge && go run main.go && go test -race ./...
+cd whatsapp-mcp-server && uv sync --all-extras && uv run python check.py && uv run pytest --cov=lib -v
+cd whatsapp-web-ui && npm ci && npm run dev
 ```
 
-**For Docker deployment:**
+Run `uv run python check.py` (quick) before a Docker build; it catches import and syntax errors in seconds.
+
+When `whatsmeow` reports `Client outdated (405)`:
 
 ```bash
-# Enter container, run migration
-docker exec whatsapp-bridge sqlite3 /app/whatsapp-bridge/store/messages.db < whatsapp-bridge/migrations/001_add_metadata_fields.sql
-
-# Or: copy migration into container and run
-docker cp whatsapp-bridge/migrations/001_add_metadata_fields.sql whatsapp-bridge:/tmp/
-docker exec whatsapp-bridge sqlite3 /app/whatsapp-bridge/store/messages.db < /tmp/001_add_metadata_fields.sql
+cd whatsapp-bridge && go get -u go.mau.fi/whatsmeow@latest && go mod tidy
 ```
 
-**Migration Safety:**
-- ✅ All migrations are **append-only** (add columns, indexes, tables)
-- ✅ **Backward compatible** (old code still works)
-- ✅ **Idempotent** (use `IF NOT EXISTS`, safe to run multiple times)
-- ✅ **Rollback** (backup `store/messages.db` before running)
+## Database migrations
 
-**When creating new migrations:**
-- Place in `whatsapp-bridge/migrations/`
-- Use sequential naming: `001_feature.sql`, `002_feature.sql`
-- Include comments explaining each change
-- Ensure all statements use `IF NOT EXISTS` guards
-- Don't use `DROP TABLE` or destructive commands
-- Verify with existing schema before merging
+Schema changes must not require rebuilding from scratch. Add an idempotent, append-only script in `whatsapp-bridge/migrations/` (`NNN_feature.sql`, `IF NOT EXISTS`, no `DROP`), keep it backward compatible, and document it in [docs/migrations.md](docs/migrations.md). Back up `store/messages.db` before running one.
 
-## Key Patterns
+## Key patterns
 
-### Go Bridge Structure
-- `internal/api/` - HTTP handlers, CORS middleware, JSON responses
-- `internal/whatsapp/` - WhatsApp client wrapper, message/media handling
-- `internal/webhook/` - Webhook manager, trigger matching, delivery with retries
-- `internal/database/` - SQLite message store, webhook config persistence
-- `internal/types/` - Shared type definitions (WebhookConfig, WebhookPayload, etc.)
-
-### Python MCP Server
-- `whatsapp.py` - Core library: dataclasses (Message, Chat, Contact), database queries, API calls to bridge
-- `main.py` - MCP server with **stdio** transport (for Claude Code CLI)
-- `gradio-main.py` - MCP server with **SSE** transport + Gradio UI (for Docker/network)
-- Uses `BRIDGE_HOST` env var to connect to Go bridge (e.g., `localhost:8180` or `hostname:port`)
-
-### Webhook System
-Trigger types: `all`, `chat_jid`, `sender`, `keyword`, `media_type`
-Match types: `exact`, `contains`, `regex`
-Delivery: async with exponential backoff, HMAC-SHA256 signatures
-
-### JID Formats
-- Individual: `{phone}@s.whatsapp.net`
-- Group: `{id}@g.us`
+- **Toolsets.** Tools register through the `@tool(<toolset>, <title>, ...)` decorator in `main.py`. `WHATSAPP_MCP_TOOLSETS` selects toolsets (`all` by default); `WHATSAPP_MCP_TOOLS` adds single tools by name.
+- **Reads vs writes.** Reads come straight from SQLite; actions go through the bridge REST API.
+- **Webhooks.** Triggers: `all`, `chat_jid`, `sender`, `keyword`, `media_type`. Matching: `exact`, `contains`, `regex`. Delivery is async with exponential backoff and HMAC-SHA256 signatures.
+- **JIDs.** Individual `{phone}@s.whatsapp.net`, group `{id}@g.us`, linked device `{id}@lid`, broadcast `status@broadcast`.
+- **Message ids** are hex strings (for example `3EB028A580CF7CC9AAF3A2`), used by edit, delete, react and mark-read.
 
 ## Ports
-- 8080: Bridge REST API (mapped to 8180 in docker-compose)
-- 8081: MCP SSE server
-- 8082: Gradio UI
-- 8089: Webhook management UI
 
-## Environment Variables
-- `BRIDGE_HOST`: Go bridge hostname (default: localhost, set to container name in docker)
-- `GRADIO`: Enable/disable Gradio UI (true/false)
-- `DEBUG`: Enable debug logging
-
-## Technology References
-
-### whatsmeow (Go WhatsApp Library)
-- **Repo:** https://github.com/tulir/whatsmeow
-- **Docs:** https://pkg.go.dev/go.mau.fi/whatsmeow
-- **Key Types:**
-  - `SendResponse` - Returns ID, Timestamp from SendMessage
-  - `events.Message` - Incoming message structure
-  - `types.GroupInfo` - Group metadata (name, topic, participants)
-  - `types.JID` - WhatsApp identifier format
-
-### Message ID Format
-- Format: Hex string (e.g., `3EB028A580CF7CC9AAF3A2`)
-- Used for: edit, delete, react, mark_read operations
-- Returned by: send_message, send_file, send_audio_message
-
-### JID (Jabber ID) Format
-- Individual: `{phone}@s.whatsapp.net` (e.g., `6593439326@s.whatsapp.net`)
-- Group: `{id}@g.us` (e.g., `120363123456789012@g.us`)
-- LID (linked device): `{id}@lid`
-- Broadcast: `status@broadcast`
-
-### MCP Tool Output Format
-All tools return structured dictionaries:
-- `send_message/send_file/send_audio`: `{success, message_id, timestamp, recipient, error?}`
-- `list_messages`: `[{id, chat_jid, chat_name, sender, content, timestamp, is_from_me, media_type, filename?, file_length?}]`
-- `list_chats`: `[{jid, name, is_group, last_message_time, last_message, last_sender, last_is_from_me}]`
-- `search_contacts`: `[{jid, phone_number, name, first_name, full_name, push_name, business_name, nickname}]`
+| Service | Host | Container |
+|---------|------|-----------|
+| Bridge REST API | `127.0.0.1:8180` | `8080` |
+| MCP server (`/mcp`) | `127.0.0.1:8081` | `8081` |
+| Web panel | `127.0.0.1:8090` | `8080` |
 
 ## Security
 
-### API Authentication
-**Required in production.** Set `API_KEY` env var - bridge fails to start if unset.
-- Dev mode: `DISABLE_AUTH_CHECK=true` to skip
-- Generate: `openssl rand -hex 32`
-- Uses constant-time comparison
+- **Bridge API** requires `X-API-Key` (`API_KEY`, constant-time comparison) or a panel session. The bridge exits at startup without `API_KEY` unless `DISABLE_AUTH_CHECK=true` (development only).
+- **Panel login** uses `WEB_UI_USERNAME` / `WEB_UI_PASSWORD`, server-side sessions, an `HttpOnly` `SameSite=Strict` cookie, an `Origin` check on cookie-authenticated state changes, and login throttling. See [docs/authentication.md](docs/authentication.md).
+- **Webhook URLs** that point at private networks are blocked (`DISABLE_SSRF_CHECK=true` to test locally).
+- **Media paths** must be inside the allowed directories (`DISABLE_PATH_CHECK=true` for development only).
+- **Rate limit:** 100 requests per minute per address on the bridge API.
+- **CORS:** `localhost` and `127.0.0.1` on ports 8089 and 8090, plus `CORS_ORIGINS`.
+- **Containers** run as a non-root user in production. Never print secrets in logs.
 
-### Webhook URLs
-Private IPs blocked by default (10.x, 172.16.x, 192.168.x, 127.x, 169.254.x). Set `DISABLE_SSRF_CHECK=true` for testing.
+See [SECURITY.md](SECURITY.md) and [docs/configuration.md](docs/configuration.md).
 
-### Media Paths
-Must be within `/app/media`, `/app/store`, or `/tmp`. Set `DISABLE_PATH_CHECK=true` for development.
+## Code standards
 
-### Rate Limiting
-100 requests/minute per IP on bridge API.
+**Go:** use the logger, not `fmt.Println` (except QR and startup status); godoc on exported functions; table-driven tests; wrap errors with `fmt.Errorf("context: %w", err)`; exit with `os.Exit(1)` on critical startup errors.
 
-### CORS
-Allowed origins: `localhost:8089`, `localhost:8082`. Configurable in `middleware.go`.
+**Python:** use `logger` from `lib.utils`, not `print()`; type hints and docstrings on public functions; raise exceptions instead of returning empty on error.
 
-### Containers
-Run as non-root `appuser` in production.
-
-## Code Standards
-
-### Go
-- Use `logger` for logging, not `fmt.Println` (except QR/server status)
-- All exported functions need godoc comments
-- Table-driven tests preferred
-- Error wrapping: `fmt.Errorf("context: %w", err)`
-- Critical startup errors: `os.Exit(1)` not `return`
-
-### Python
-- Use `logger` from `lib.utils`, not `print()`
-- Type hints on all functions
-- Docstrings on all public functions
-- Raise exceptions, don't return empty on error
-- Python modules live in `lib/`: models, database, bridge, utils
+**TypeScript:** strict types; no credentials in browser storage; state from the server, not from `localStorage`.
 
 ## Testing
 
-### Running Tests
 ```bash
-# Python
 cd whatsapp-mcp-server && uv run pytest --cov=lib -v
-
-# Go
 cd whatsapp-bridge && go test -v -race ./...
+cd whatsapp-web-ui && npx tsc --noEmit && npx eslint src
 ```
 
-### Coverage Target
-Minimum 50% coverage. See `docs/TESTING_ROADMAP.md` for gaps and priorities.
-
-### CI/CD
-GitHub Actions run on push/PR to main:
-- `.github/workflows/go-test.yml` - Go tests + build
-- `.github/workflows/python-test.yml` - Python tests + type check
-- `.github/workflows/lint.yml` - golangci-lint, ruff, hadolint
+Minimum 50% coverage. CI runs on push and pull request to `main`: `go-test.yml`, `python-test.yml`, `lint.yml` and `security.yml`.

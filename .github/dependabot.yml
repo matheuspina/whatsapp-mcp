@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /whatsapp-bridge
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /whatsapp-mcp-server
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /whatsapp-web-ui
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
