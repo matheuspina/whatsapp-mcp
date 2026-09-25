@@ -12,6 +12,7 @@ whatsapp-bridge/whatsapp-bridge
 # Sensitive data - NEVER commit
 store/
 store.bak/
+store-index/
 *.session
 claude_desktop_config.json
 

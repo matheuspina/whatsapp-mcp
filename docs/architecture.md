@@ -15,6 +15,8 @@ flowchart LR
         UI["web-ui<br/>Next.js static, nginx<br/>:8090"]
         Bridge["whatsapp-bridge<br/>Go, whatsmeow<br/>:8180"]
         Store[("store/<br/>messages.db<br/>whatsapp.db")]
+        Indexer["indexer<br/>Python, background"]
+        IndexDB[("store-index/<br/>index.db")]
     end
 
     WA(["WhatsApp<br/>servers"])
@@ -25,6 +27,8 @@ flowchart LR
     MCP -- "REST, X-API-Key<br/>(send, edit, ...)" --> Bridge
     MCP -- "read-only queries" --> Store
     Bridge <--> Store
+    Indexer -- "read-only" --> Store
+    Indexer -- "writes" --> IndexDB
     Bridge <-- "multi-device protocol" --> WA
 ```
 
@@ -32,6 +36,7 @@ flowchart LR
 |-----------|-----------|------|
 | **Bridge** | [`whatsapp-bridge/`](../whatsapp-bridge) | The only process that talks to WhatsApp. Handles pairing, reconnects, incoming messages and history sync, media download, webhooks and the REST API. Owns `messages.db` and `whatsapp.db`. Also holds the panel's login sessions. |
 | **MCP server** | [`whatsapp-mcp-server/`](../whatsapp-mcp-server) | Turns bridge and database capabilities into MCP tools. Reads messages and contacts straight from SQLite; asks the bridge to perform actions (send, edit, react, ...). |
+| **Search indexer** | [`whatsapp-mcp-server/search/`](../whatsapp-mcp-server/search) | Background service that reads `messages.db` read-only and maintains a local keyword-search index. Not yet exposed as MCP tools. See [search.md](search.md). |
 | **Web panel** | [`whatsapp-web-ui/`](../whatsapp-web-ui) | Static Next.js app served by nginx. Login, device pairing, sync status, active sessions and webhook management. It calls the bridge API directly from the browser. |
 
 ## Data flow
@@ -54,6 +59,8 @@ See [webhooks.md](webhooks.md).
 | `store/messages.db` | Bridge | Chats, messages, nicknames and webhook configuration. See [database.md](database.md). |
 | `store/whatsapp.db` | whatsmeow | Device session, encryption keys, synced contacts. **Never edit it.** |
 | `store/<chat-jid>/` | Bridge | Downloaded media. |
+| `store/mcp_oauth.db` | MCP server | OAuth clients and token digests, only when `MCP_PUBLIC_URL` is set. See [mcp-oauth.md](mcp-oauth.md). |
+| `store-index/index.db` | Indexer | Search index: a plain-text copy of message text. See [search.md](search.md). |
 
 Both databases use WAL mode so the MCP server can read while the bridge writes. Everything under `store/` is sensitive.
 
