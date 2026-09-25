@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { Link2, MessageSquare, Settings, Webhook } from "lucide-react";
+import { Link2, LogOut, MessageSquare, Settings, Webhook } from "lucide-react";
 import { WhatsAppAPI } from "@/lib/api";
-import { useSettings } from "@/lib/store";
+import { useAuth } from "@/lib/store";
 
 const navItems = [
   {
@@ -27,24 +27,32 @@ type ConnectionDotStatus = "connected" | "disconnected" | "unknown";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { apiKey } = useSettings();
+  const { username, setAnon } = useAuth();
   const [connStatus, setConnStatus] = useState<ConnectionDotStatus>("unknown");
 
   const pollConnection = useCallback(async () => {
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       const status = await api.getConnectionStatus();
       setConnStatus(status.connected ? "connected" : "disconnected");
     } catch {
       setConnStatus("unknown");
     }
-  }, [apiKey]);
+  }, []);
 
   useEffect(() => {
     pollConnection();
     const interval = setInterval(pollConnection, 10000);
     return () => clearInterval(interval);
   }, [pollConnection]);
+
+  const handleLogout = async () => {
+    try {
+      await new WhatsAppAPI().logout();
+    } finally {
+      setAnon(); // the gate redirects to /login
+    }
+  };
 
   const dotColor = {
     connected: "bg-green-500",
@@ -64,7 +72,7 @@ export function Sidebar() {
         </div>
         <div>
           <h1 className="font-bold text-lg">WhatsApp MCP</h1>
-          <p className="text-xs text-muted-foreground">Extended</p>
+          <p className="text-xs text-muted-foreground">by Matheus Pina</p>
         </div>
       </div>
 
@@ -107,6 +115,19 @@ export function Sidebar() {
           <Settings className="h-5 w-5" />
           <span className="font-medium text-sm">Settings</span>
         </Link>
+        <div className="mt-2 flex items-center justify-between gap-2 px-3 py-2 text-sm">
+          <span className="truncate text-muted-foreground" title={username}>
+            {username}
+          </span>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex shrink-0 items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </div>
       </div>
     </aside>
   );

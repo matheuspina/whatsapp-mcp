@@ -1,27 +1,26 @@
 "use client";
 
-import { useEffect } from "react";
-import { useSettings } from "@/lib/store";
+import { LogOut } from "lucide-react";
+import { toast } from "sonner";
+import { ActiveSessions } from "@/components/settings/active-sessions";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { WhatsAppAPI, getErrorMessage } from "@/lib/api";
+import { useAuth, useSettings } from "@/lib/store";
 
 export default function SettingsPage() {
-  const { apiKey, darkMode, setApiKey, setDarkMode } = useSettings();
+  const { darkMode, setDarkMode } = useSettings();
+  const { username, setAnon } = useAuth();
 
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
+  const handleLogout = async () => {
+    try {
+      await new WhatsAppAPI().logout();
+    } catch (error) {
+      toast.error(getErrorMessage(error).title, { description: getErrorMessage(error).description });
     }
-  }, [darkMode]);
-
-  const handleSave = () => {
-    toast.success("Settings saved");
+    setAnon(); // the gate sends us back to /login
   };
 
   return (
@@ -29,30 +28,28 @@ export default function SettingsPage() {
       <div className="max-w-2xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">Configure your WhatsApp MCP connection</p>
+          <p className="text-muted-foreground">Account, sessions and appearance</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>API Configuration</CardTitle>
-            <CardDescription>Configure your connection to the WhatsApp bridge</CardDescription>
+            <CardTitle>Account</CardTitle>
+            <CardDescription>
+              Sign-in credentials are set on the server (WEB_UI_USERNAME / WEB_UI_PASSWORD in .env).
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="apiKey">API Key</Label>
-              <Input
-                id="apiKey"
-                type="password"
-                placeholder="Enter your API key"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-              />
-              <p className="text-sm text-muted-foreground">
-                The API key is used to authenticate with the WhatsApp bridge
-              </p>
+          <CardContent className="flex items-center justify-between">
+            <div className="text-sm">
+              Signed in as <span className="font-medium">{username}</span>
             </div>
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </Button>
           </CardContent>
         </Card>
+
+        <ActiveSessions />
 
         <Card>
           <CardHeader>
@@ -63,22 +60,12 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="darkMode">Dark Mode</Label>
-                <p className="text-sm text-muted-foreground">
-                  Enable dark theme for the interface
-                </p>
+                <p className="text-sm text-muted-foreground">Enable dark theme for the interface</p>
               </div>
-              <Switch
-                id="darkMode"
-                checked={darkMode}
-                onCheckedChange={setDarkMode}
-              />
+              <Switch id="darkMode" checked={darkMode} onCheckedChange={setDarkMode} />
             </div>
           </CardContent>
         </Card>
-
-        <div className="flex justify-end">
-          <Button onClick={handleSave}>Save Settings</Button>
-        </div>
       </div>
     </div>
   );

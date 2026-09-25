@@ -7,7 +7,7 @@ import { WhatsAppAPI } from "@/lib/api";
 
 export default function PairingPage() {
   const { step, setStep, setJid } = usePairing();
-  const { apiKey, darkMode } = useSettings();
+  const { darkMode } = useSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -22,7 +22,7 @@ export default function PairingPage() {
   useEffect(() => {
     const checkExistingConnection = async () => {
       try {
-        const api = new WhatsAppAPI(apiKey);
+        const api = new WhatsAppAPI();
         const status = await api.getConnectionStatus();
         if (status.success && status.linked && status.jid) {
           setJid(status.jid);
@@ -36,7 +36,7 @@ export default function PairingPage() {
     };
 
     checkExistingConnection();
-  }, [apiKey, setJid, setStep]);
+  }, [setJid, setStep]);
 
   if (!initialized) {
     return (

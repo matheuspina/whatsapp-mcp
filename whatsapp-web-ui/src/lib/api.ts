@@ -94,32 +94,91 @@ export interface WebhookLogsResponse {
   error?: string;
 }
 
+// Fired when the bridge rejects a request because the session is missing or expired.
+export const UNAUTHORIZED_EVENT = "wa:unauthorized";
+
+// Endpoints where a 401 is an expected answer rather than a lost session.
+const AUTH_PROBE_ENDPOINTS = ["/auth/login", "/auth/me", "/auth/logout"];
+
+// Session details as reported by the bridge. The token itself never reaches the browser:
+// it lives in an HttpOnly cookie set by the server.
+export interface AuthUser {
+  username: string;
+  expires_at: string;
+}
+
+export interface ActiveSession {
+  id: string;
+  username: string;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+  ip: string;
+  user_agent: string;
+  current: boolean;
+}
+
 export class WhatsAppAPI {
   private baseUrl: string;
-  private apiKey: string;
 
-  constructor(apiKey: string) {
+  constructor() {
     this.baseUrl = getApiBaseUrl();
-    this.apiKey = apiKey;
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
+      // The session is an HttpOnly cookie; the browser attaches it, scripts never touch it.
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": this.apiKey,
         ...options.headers,
       },
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new APIError(response.status, data.error || "Request failed");
+    // Errors from proxies or older bridges may not be JSON; never let that mask the status code.
+    let data: { error?: string } & Record<string, unknown> = {};
+    try {
+      data = await response.json();
+    } catch {
+      /* non-JSON body */
     }
 
-    return data;
+    if (!response.ok) {
+      if (response.status === 401 && typeof window !== "undefined" && !AUTH_PROBE_ENDPOINTS.includes(endpoint)) {
+        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+      }
+      throw new APIError(response.status, (data.error as string) || response.statusText || "Request failed");
+    }
+
+    return data as T;
+  }
+
+  // Authentication methods
+  async login(username: string, password: string): Promise<AuthUser> {
+    const res = await this.request<{ data: AuthUser }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    return res.data;
+  }
+
+  async logout(): Promise<void> {
+    await this.request("/auth/logout", { method: "POST" });
+  }
+
+  async me(): Promise<AuthUser> {
+    const res = await this.request<{ data: AuthUser }>("/auth/me");
+    return res.data;
+  }
+
+  async listSessions(): Promise<ActiveSession[]> {
+    const res = await this.request<{ data: ActiveSession[] }>("/auth/sessions");
+    return res.data || [];
+  }
+
+  async revokeSession(id: string): Promise<void> {
+    await this.request(`/auth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
   // Pairing methods
@@ -202,8 +261,8 @@ export const getErrorMessage = (error: unknown): { title: string; description: s
       case 401:
         return {
           title: "Unauthorized",
-          description: "Your API key is invalid or expired.",
-          action: "Check your API key in Settings",
+          description: "Your session is missing or has expired.",
+          action: "Sign in again",
         };
       case 404:
         return {

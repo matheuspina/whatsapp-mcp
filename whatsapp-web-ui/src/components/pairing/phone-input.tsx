@@ -7,13 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Key } from "lucide-react";
 import { WhatsAppAPI, getErrorMessage } from "@/lib/api";
-import { useSettings, usePairing } from "@/lib/store";
+import { usePairing } from "@/lib/store";
 import { toast } from "sonner";
 
 export function PhoneInput() {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
-  const { apiKey } = useSettings();
   const { setStep, setPhoneNumber, setPairingCode } = usePairing();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,7 +28,7 @@ export function PhoneInput() {
 
     setLoading(true);
     try {
-      const api = new WhatsAppAPI(apiKey);
+      const api = new WhatsAppAPI();
       const result = await api.pair(cleanedPhone);
 
       if (result.success && result.code) {

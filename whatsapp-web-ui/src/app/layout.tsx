@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
-import { Sidebar } from "@/components/layout/sidebar";
+import { AuthGate } from "@/components/auth/auth-gate";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,8 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "WhatsApp MCP Extended",
-  description: "Manage WhatsApp device pairing and webhooks",
+  title: "WhatsApp MCP",
+  description: "WhatsApp MCP by Matheus Pina: manage device pairing, sessions and webhooks",
+  authors: [{ name: "Matheus Pina" }],
 };
 
 export default function RootLayout({
@@ -27,12 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={geistSans.variable + " " + geistMono.variable + " antialiased"}>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 bg-muted/30">
-            {children}
-          </main>
-        </div>
+        <AuthGate>{children}</AuthGate>
         <Toaster richColors position="top-right" />
       </body>
     </html>
