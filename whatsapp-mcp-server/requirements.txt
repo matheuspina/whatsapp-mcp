@@ -3,7 +3,7 @@ httpx>=0.28.1
 # Without the cap a fresh build picks up 2.0 and the server dies on import
 # with ModuleNotFoundError.
 mcp[cli]>=1.23.0,<2.0.0
-requests>=2.32.3
+requests>=2.34.2
 starlette>=1.3.1
 uvicorn>=0.23.2
 urllib3>=2.6.3
