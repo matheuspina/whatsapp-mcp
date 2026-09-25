@@ -51,6 +51,19 @@ See [history-sync.md](history-sync.md).
 | `WA_SKIP_DB_CHECK` | `0` | Set to `1` to skip the startup check that `messages.db` exists (tests and linting). |
 | `DEBUG` | `false` | Verbose logging. |
 
+## Local search indexer
+
+The background indexer that keeps `store/index.db` up to date. See [search.md](search.md).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INDEX_DB_PATH` | `store/index.db` | Where the search index database is written. |
+| `INDEX_POLL_SECONDS` | `20` | How often the indexer checks for new messages once caught up. |
+| `CHUNK_GAP_MINUTES` | `30` | Silence, in minutes, that starts a new conversation chunk. |
+| `CHUNK_MAX_MESSAGES` | `15` | Maximum messages per chunk before it splits. |
+| `CHUNK_MAX_CHARS` | `1500` | Maximum characters per chunk before it splits. |
+| `CHUNK_OVERLAP` | `2` | Messages repeated at the start of the next chunk, for context. |
+
 ## Bridge
 
 | Variable | Default | Description |

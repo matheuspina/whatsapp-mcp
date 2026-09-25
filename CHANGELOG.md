@@ -8,6 +8,11 @@ All notable changes to this project are recorded here. The format follows
 Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 
 ### Added
+- Local search indexer (Phase 1 of hybrid search): a background service that keeps a keyword-searchable
+  SQLite FTS5 index (`store/index.db`) in sync with `messages.db`, plus overlapping conversation chunks
+  ready for local embeddings in a later phase. Runs as its own `indexer` Compose service, read-only
+  against the bridge store. No message content leaves the machine or is logged. See
+  [docs/search.md](docs/search.md).
 - Web panel login with a username and password from `.env` (`WEB_UI_USERNAME`, `WEB_UI_PASSWORD`, `WEB_UI_SESSION_TTL`).
 - Server-side sessions delivered as an `HttpOnly`, `SameSite=Strict` cookie, with CSRF protection through an `Origin` check and login throttling.
 - Active sessions list in Settings, with the ability to end other sessions. New endpoints: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/sessions`, `DELETE /api/auth/sessions/{id}`.

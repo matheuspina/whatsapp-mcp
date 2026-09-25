@@ -9,6 +9,7 @@
 | [Webhooks](webhooks.md) | Real-time message webhooks: triggers, matching, signatures, retries |
 | [Database](database.md) | SQLite schema, what is and is not captured |
 | [Migrations](migrations.md) | Running schema migrations on an existing installation |
+| [Search](search.md) | Local hybrid search: the background indexer, keyword search (FTS5) and chunking |
 | [Response design](response-design.md) | Why tool responses carry raw data instead of interpretation |
 
 Also in the repository root: [README](../README.md), [SECURITY](../SECURITY.md), [CONTRIBUTING](../CONTRIBUTING.md),
