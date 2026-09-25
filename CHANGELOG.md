@@ -13,6 +13,7 @@ Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 - Active sessions list in Settings, with the ability to end other sessions. New endpoints: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/sessions`, `DELETE /api/auth/sessions/{id}`.
 - Documentation: configuration reference, authentication, architecture, and a rewritten README and security policy.
 - `NOTICE.md`, `COMMERCIAL.md`, `ACKNOWLEDGEMENTS.md` and a code of conduct.
+- OAuth 2.1 for the MCP endpoint, opt-in through `MCP_PUBLIC_URL`: discovery (RFC 9728, RFC 8414), dynamic client registration, authorization code with PKCE, rotating refresh tokens, revocation, and a sign-in page that reuses the panel credentials. `API_KEY` is also accepted as a bearer token. See [docs/mcp-oauth.md](docs/mcp-oauth.md).
 
 ### Changed
 - Project name and branding: **WhatsApp MCP** by Matheus Pina. The MCP server now reports itself as `whatsapp-mcp`.

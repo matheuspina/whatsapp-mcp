@@ -5,6 +5,7 @@
 | [Architecture](architecture.md) | Components, data flow, storage, security boundaries, where to extend |
 | [Configuration](configuration.md) | Every environment variable, defaults and ports |
 | [Authentication](authentication.md) | Web panel login, sessions, API key, protections and limits |
+| [MCP OAuth](mcp-oauth.md) | OAuth 2.1 for the MCP endpoint: setup, supported clients, security model |
 | [History sync](history-sync.md) | How much history WhatsApp sends, on-demand requests, limits |
 | [Webhooks](webhooks.md) | Real-time message webhooks: triggers, matching, signatures, retries |
 | [Database](database.md) | SQLite schema, what is and is not captured |

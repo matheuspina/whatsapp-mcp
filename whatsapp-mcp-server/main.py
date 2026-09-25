@@ -10,6 +10,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
 
+from lib.oauth import setup_oauth
+from lib.utils import STORE_PATH as _STORE_PATH
 from lib.utils import WHATSAPP_API_BASE_URL as _BRIDGE_URL
 
 # Phase 2: Group Management
@@ -63,8 +65,13 @@ from whatsapp import update_group as whatsapp_update_group
 
 _INLINE_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
+# OAuth 2.1 is opt-in (MCP_PUBLIC_URL) and only applies to the HTTP transports.
+_oauth = setup_oauth(os.getenv("MCP_TRANSPORT", "stdio"), _STORE_PATH)
+
 # Initialize FastMCP server
-mcp = FastMCP("whatsapp-mcp")
+mcp = FastMCP("whatsapp-mcp", **(_oauth.fastmcp_kwargs() if _oauth else {}))
+if _oauth:
+    _oauth.register(mcp)
 
 ALL_TOOLSETS = {
     "core",

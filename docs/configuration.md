@@ -47,6 +47,8 @@ See [history-sync.md](history-sync.md).
 | `MCP_TRANSPORT` | `stdio` (`streamable-http` in Docker) | `stdio`, `sse` or `streamable-http`. |
 | `HOST` / `PORT` | `0.0.0.0` / `8081` | Bind address for the HTTP transports. |
 | `BRIDGE_HOST` | `localhost:8080` (`whatsapp-bridge` in Docker) | Where the MCP server finds the bridge. |
+| `MCP_PUBLIC_URL` | *(unset)* | Public origin of the MCP server. Setting it turns on OAuth 2.1 for the MCP endpoint and requires `WEB_UI_USERNAME` / `WEB_UI_PASSWORD`. See [mcp-oauth.md](mcp-oauth.md). |
+| `MCP_OAUTH_ACCESS_TOKEN_TTL` / `MCP_OAUTH_REFRESH_TOKEN_TTL` | `3600` / `2592000` | OAuth token lifetimes, in seconds. |
 | `WA_STORE_PATH` | auto | Directory containing `messages.db` and `whatsapp.db`. |
 | `WA_SKIP_DB_CHECK` | `0` | Set to `1` to skip the startup check that `messages.db` exists (tests and linting). |
 | `DEBUG` | `false` | Verbose logging. |

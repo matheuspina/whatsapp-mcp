@@ -67,7 +67,7 @@ Errors are JSON: `{"success": false, "error": "..."}`.
 - There is no TLS by default. If you expose the panel beyond `127.0.0.1`, use a reverse proxy that terminates TLS and
   sets `X-Forwarded-Proto: https`.
 - There is one account. Multiple users or roles are not supported.
-- The MCP endpoint is **not** covered by any of this. See [SECURITY.md](../SECURITY.md#known-limitations).
+- The MCP endpoint is **not** covered by any of this. It is open unless you set `MCP_PUBLIC_URL`, which turns on OAuth 2.1 (the sign-in page reuses these same credentials). See [mcp-oauth.md](mcp-oauth.md).
 
 ## Rotating credentials
 

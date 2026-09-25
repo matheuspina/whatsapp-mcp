@@ -71,6 +71,13 @@ services:
       - WHATSAPP_MCP_TOOLSETS=${WHATSAPP_MCP_TOOLSETS:-all}
       - BRIDGE_HOST=whatsapp-bridge
       - API_KEY=${API_KEY}
+      # OAuth 2.1 for the MCP endpoint. Off unless MCP_PUBLIC_URL is set, see docs/mcp-oauth.md.
+      # When on, the login page checks the same credentials as the web panel.
+      - MCP_PUBLIC_URL=${MCP_PUBLIC_URL:-}
+      - WEB_UI_USERNAME=${WEB_UI_USERNAME:-}
+      - WEB_UI_PASSWORD=${WEB_UI_PASSWORD:-}
+      - MCP_OAUTH_ACCESS_TOKEN_TTL=${MCP_OAUTH_ACCESS_TOKEN_TTL:-3600}
+      - MCP_OAUTH_REFRESH_TOKEN_TTL=${MCP_OAUTH_REFRESH_TOKEN_TTL:-2592000}
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8081), timeout=3)"]
       interval: 30s

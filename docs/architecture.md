@@ -61,7 +61,7 @@ Both databases use WAL mode so the MCP server can read while the bridge writes. 
 
 - Every published port is bound to `127.0.0.1`. Services reach each other over the internal `whatsapp_internal` network.
 - The bridge API requires `X-API-Key` or a panel session cookie. See [authentication.md](authentication.md) and [SECURITY.md](../SECURITY.md).
-- The MCP endpoint itself is unauthenticated and local-only.
+- The MCP endpoint is unauthenticated and local-only by default. With `MCP_PUBLIC_URL` set it requires an OAuth 2.1 bearer token; see [mcp-oauth.md](mcp-oauth.md).
 
 ## Design principles
 

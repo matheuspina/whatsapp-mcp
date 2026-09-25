@@ -358,7 +358,7 @@ Run `make help` for the rest.
 - **Authenticated.** The bridge API needs an API key or a panel session; the panel uses `HttpOnly`, `SameSite=Strict` cookies, CSRF checks and login throttling.
 - **The assistant sees what it reads.** When a tool returns messages, that text is sent to your AI provider as part of the conversation. Use narrow toolsets, and do not connect this to an assistant you do not trust with that data.
 - **Prompt injection is real.** Anyone who can message you can put text in front of your assistant. Keep approval on for write tools.
-- **The MCP endpoint has no login.** It is reachable only from your machine, but any local program can use it. See the [known limitations](SECURITY.md#known-limitations).
+- **The MCP endpoint has no login by default.** It is reachable only from your machine, but any local program can use it. Set `MCP_PUBLIC_URL` to require OAuth 2.1 ([guide](docs/mcp-oauth.md)). See the [known limitations](SECURITY.md#known-limitations).
 - **Your data is not encrypted at rest.** Use full-disk encryption and never share or commit `store/` or `.env`.
 
 Read the full [security policy](SECURITY.md) and its [hardening checklist](SECURITY.md#hardening-checklist).
@@ -438,7 +438,7 @@ Details, code style and how to add a tool are in [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Roadmap
 
-Next up: authentication for the MCP endpoint, local hybrid search (exact terms plus meaning, entirely on your machine), and persistent panel sessions.
+Next up: local hybrid search (exact terms plus meaning, entirely on your machine), and persistent panel sessions.
 See [ROADMAP.md](ROADMAP.md) and the [changelog](CHANGELOG.md).
 
 ## Contributing

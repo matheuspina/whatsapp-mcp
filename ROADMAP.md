@@ -16,7 +16,6 @@ Ideas and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Next
 
-- **Authentication for the MCP endpoint.** The MCP server is local-only but unauthenticated; add an optional token so other local processes cannot use it.
 - **Local hybrid search.** Find messages by exact terms and by meaning, entirely on your machine (no message content leaves it): SQLite full-text search plus local embeddings, fused into one ranked result, as an opt-in toolset.
 - **Persistent panel sessions** (optional), so a restart does not sign you out.
 - **A ready-made TLS profile** for the Compose file, for people who want to reach the panel from another device.
