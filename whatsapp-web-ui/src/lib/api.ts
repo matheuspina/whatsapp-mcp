@@ -1,4 +1,7 @@
 const getApiBaseUrl = () => {
+  // One-origin deployments (the single Dockerfile, behind a reverse proxy) build with NEXT_PUBLIC_API_BASE_URL=/api.
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (configured) return configured.replace(/\/$/, "");
   if (typeof window === "undefined") return "http://localhost:8180/api";
   return `${window.location.protocol}//${window.location.hostname}:8180/api`;
 };
