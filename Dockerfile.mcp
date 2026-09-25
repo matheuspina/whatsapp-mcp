@@ -1,5 +1,5 @@
 # Build stage: install deps into isolated venv, keeps build tools out of final image
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
 
 RUN pip install --no-cache-dir uv
 
@@ -12,7 +12,7 @@ RUN grep -vE "^gradio" requirements.txt > requirements-docker.txt \
     && uv pip install --python /opt/venv --no-cache -r requirements-docker.txt
 
 # Runtime stage: slim base + ffmpeg + venv only, no build tools
-FROM python:3.13-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
