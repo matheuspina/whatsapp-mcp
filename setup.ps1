@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    One-shot setup for whatsapp-mcp-extended on Windows.
+    One-shot setup for WhatsApp MCP on Windows.
     Run once after cloning: .\setup.ps1
     Re-run at any time to update scheduled tasks.
 .DESCRIPTION
@@ -29,7 +29,7 @@ $ENV_EXAMPLE = Join-Path $ProjectPath ".env.example"
 $MCP_DIR     = Join-Path $ProjectPath "whatsapp-mcp-server"
 
 Write-Host ""
-Write-Host "=== whatsapp-mcp-extended setup ===" -ForegroundColor Cyan
+Write-Host "=== WhatsApp MCP setup ===" -ForegroundColor Cyan
 Write-Host "Project: $ProjectPath" -ForegroundColor Gray
 Write-Host ""
 

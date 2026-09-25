@@ -79,7 +79,7 @@ open-ui:
 
 help:
 	@echo ""
-	@echo "whatsapp-mcp-extended — available targets:"
+	@echo "WhatsApp MCP - available targets:"
 	@echo ""
 	@echo "  setup          One-shot Windows host setup (run once after cloning)"
 	@echo "  up             docker-compose up -d"

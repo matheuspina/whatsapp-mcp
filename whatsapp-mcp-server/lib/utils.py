@@ -11,7 +11,7 @@ try:
     # Try multiple locations for .env
     possible_paths = [
         Path(__file__).parent.parent.parent / ".env",  # /app/.env (Docker)
-        Path(__file__).parent.parent.parent.parent / ".env",  # /whatsapp-mcp-extended/.env (local)
+        Path(__file__).parent.parent.parent.parent / ".env",  # <repo root>/.env (local)
         Path.cwd() / ".env",  # Current working directory
     ]
 
