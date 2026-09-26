@@ -23,10 +23,10 @@ var (
 // getAllowedOrigins returns the list of allowed CORS origins
 func getAllowedOrigins() map[string]bool {
 	origins := map[string]bool{
-		"http://localhost:8089":   true, // Webhook UI (localhost)
-		"http://localhost:8090":   true, // Pairing UI (localhost)
-		"http://127.0.0.1:8089":  true, // Webhook UI (IP — browsers use IP when accessed via 127.0.0.1)
-		"http://127.0.0.1:8090":  true, // Pairing UI (IP)
+		"http://localhost:8089": true, // Webhook UI (localhost)
+		"http://localhost:8090": true, // Pairing UI (localhost)
+		"http://127.0.0.1:8089": true, // Webhook UI (IP — browsers use IP when accessed via 127.0.0.1)
+		"http://127.0.0.1:8090": true, // Pairing UI (IP)
 	}
 
 	// Allow additional origins from env var (comma-separated)
@@ -83,14 +83,14 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		if s.sessions != nil {
 			if token := sessionToken(r); token != "" {
-				if _, ok := s.sessions.Validate(token); ok {
+				if sess, ok := s.sessions.Validate(token); ok {
 					if !isSafeMethod(r.Method) && !originAllowed(r) {
 						security.LogAuthFailure(ip, r.Header.Get("User-Agent"), "Session request from disallowed Origin")
 						SendJSONError(w, "Forbidden", http.StatusForbidden)
 						return
 					}
 					security.LogAuthSuccess(ip, r.URL.Path)
-					next(w, r)
+					next(w, withActor(r, "panel:"+sess.Username))
 					return
 				}
 			}
@@ -100,7 +100,7 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// Skip auth if no API_KEY is configured (dev mode)
 		if expectedKey == "" {
-			next(w, r)
+			next(w, withActor(r, apiActor(r)))
 			return
 		}
 
@@ -112,8 +112,20 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		security.LogAuthSuccess(ip, r.URL.Path)
-		next(w, r)
+		next(w, withActor(r, apiActor(r)))
 	}
+}
+
+// apiActor names an API-key caller for audit trails: the MCP server sends the OAuth client it
+// serves in X-Actor, anything else is just "api-key".
+func apiActor(r *http.Request) string {
+	if a := strings.TrimSpace(r.Header.Get("X-Actor")); a != "" {
+		if len(a) > 120 {
+			a = a[:120]
+		}
+		return "api:" + a
+	}
+	return "api-key"
 }
 
 // RateLimitMiddleware limits requests per IP address

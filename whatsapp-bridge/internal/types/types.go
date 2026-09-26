@@ -56,15 +56,18 @@ type Message struct {
 	IsFirstMessageToday     bool           `json:"is_first_message_today,omitempty"`
 	HasReactions            bool           `json:"has_reactions,omitempty"`
 	MessagePositionInThread int            `json:"message_position_in_thread,omitempty"`
+	IsGroup                 bool           `json:"is_group,omitempty"`
 	IsRead                  bool           `json:"is_read,omitempty"`
 	InstanceJID             string         `json:"instance_jid,omitempty"`
 	IsDeletedRemote         bool           `json:"is_deleted_remote,omitempty"`
+	DeletedAt               *time.Time     `json:"deleted_at,omitempty"`
+	DeletedBy               string         `json:"deleted_by,omitempty"`
 }
 
 // Chat represents a WhatsApp chat/conversation
 type Chat struct {
 	JID                      string           `json:"jid,omitempty"`
-	InstanceJID             string           `json:"instance_jid,omitempty"`
+	InstanceJID              string           `json:"instance_jid,omitempty"`
 	Name                     string           `json:"name,omitempty"`
 	IsGroup                  bool             `json:"is_group,omitempty"`
 	LastMessageTime          time.Time        `json:"last_message_time,omitempty"`
@@ -213,6 +216,7 @@ type WebhookTriggerInfo struct {
 }
 
 type WebhookMessageInfo struct {
+	InstanceJID      string `json:"instance_jid,omitempty"`
 	ID               string `json:"id"`
 	ChatJID          string `json:"chat_jid"`
 	ChatName         string `json:"chat_name"`
@@ -514,12 +518,12 @@ type ConnectionStatusResponse struct {
 // ConnectionEventPayload is the webhook payload for connection state changes.
 // Delivered to all enabled webhooks regardless of trigger configuration.
 type ConnectionEventPayload struct {
-	EventType   string `json:"event_type"`            // connected, disconnected, logged_out, pair_success, pair_error, circuit_breaker_exhausted
-	Timestamp   string `json:"timestamp"`             // ISO-8601
-	JID         string `json:"jid,omitempty"`         // own JID when available
-	NeedsPairing bool  `json:"needs_pairing"`         // true when re-pairing required
-	Reason      string `json:"reason,omitempty"`      // for disconnected/logged_out events
-	Details     string `json:"details,omitempty"`     // additional context
+	EventType    string `json:"event_type"`        // connected, disconnected, logged_out, pair_success, pair_error, circuit_breaker_exhausted
+	Timestamp    string `json:"timestamp"`         // ISO-8601
+	JID          string `json:"jid,omitempty"`     // own JID when available
+	NeedsPairing bool   `json:"needs_pairing"`     // true when re-pairing required
+	Reason       string `json:"reason,omitempty"`  // for disconnected/logged_out events
+	Details      string `json:"details,omitempty"` // additional context
 }
 
 // SyncStatusResponse returns current message sync state
@@ -556,16 +560,69 @@ type Employee struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-// Instance represents a WhatsApp account/connection belonging to a collaborator
+// Instance represents a WhatsApp number monitored by the bridge. Its Status is the last
+// state the bridge recorded ("pairing" until the QR code is scanned).
 type Instance struct {
-	ID           int        `json:"id"`
-	PhoneJID     string     `json:"phone_jid"`
-	EmployeeID   *int       `json:"employee_id,omitempty"`
-	EmployeeName string     `json:"employee_name,omitempty"`
-	Alias        string     `json:"alias,omitempty"`
-	Status       string     `json:"status"` // "connected", "pairing", "disconnected"
-	PairedAt     *time.Time `json:"paired_at,omitempty"`
-	LastSeenAt   *time.Time `json:"last_seen_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID                      int        `json:"id"`
+	PhoneJID                string     `json:"phone_jid,omitempty"`
+	PhoneNumber             string     `json:"phone_number,omitempty"`
+	EmployeeID              *int       `json:"employee_id,omitempty"`
+	EmployeeName            string     `json:"employee_name,omitempty"`
+	DepartmentID            *int       `json:"department_id,omitempty"`
+	DepartmentName          string     `json:"department_name,omitempty"`
+	Alias                   string     `json:"alias,omitempty"`
+	Status                  string     `json:"status"`
+	Live                    bool       `json:"live"` // connected right now, from the in-memory client
+	PairedAt                *time.Time `json:"paired_at,omitempty"`
+	LastSeenAt              *time.Time `json:"last_seen_at,omitempty"`
+	AllowSend               bool       `json:"allow_send"`
+	CorporateAssetConfirmed bool       `json:"corporate_asset_confirmed"`
+	CorporateTermsVersion   string     `json:"corporate_terms_version,omitempty"`
+	CorporateConfirmedBy    string     `json:"corporate_confirmed_by,omitempty"`
+	CorporateConfirmedAt    *time.Time `json:"corporate_confirmed_at,omitempty"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
+}
+
+// FeedMessage is a captured message with the organizational context needed for auditing.
+type FeedMessage struct {
+	ID              string     `json:"id"`
+	ChatJID         string     `json:"chat_jid"`
+	ChatName        string     `json:"chat_name,omitempty"`
+	Sender          string     `json:"sender"`
+	SenderName      string     `json:"sender_name,omitempty"`
+	Content         string     `json:"content"`
+	Timestamp       time.Time  `json:"timestamp"`
+	IsFromMe        bool       `json:"is_from_me"`
+	MediaType       string     `json:"media_type,omitempty"`
+	InstanceJID     string     `json:"instance_jid,omitempty"`
+	InstanceAlias   string     `json:"instance_alias,omitempty"`
+	EmployeeID      *int       `json:"employee_id,omitempty"`
+	EmployeeName    string     `json:"employee_name,omitempty"`
+	DepartmentID    *int       `json:"department_id,omitempty"`
+	DepartmentName  string     `json:"department_name,omitempty"`
+	IsEdited        bool       `json:"is_edited,omitempty"`
+	IsDeletedRemote bool       `json:"is_deleted_remote"`
+	DeletedAt       *time.Time `json:"deleted_at,omitempty"`
+	DeletedBy       string     `json:"deleted_by,omitempty"`
+}
+
+// MessageVersion is a previous text of an edited or revoked message.
+type MessageVersion struct {
+	ID         int       `json:"id"`
+	Content    string    `json:"content"`
+	Reason     string    `json:"reason"`
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+// AccessLogEntry records a read of message data through the MCP server or the panel.
+type AccessLogEntry struct {
+	ID          int       `json:"id"`
+	Timestamp   time.Time `json:"ts"`
+	Actor       string    `json:"actor,omitempty"`
+	ClientID    string    `json:"client_id,omitempty"`
+	Action      string    `json:"action"`
+	Resource    string    `json:"resource,omitempty"`
+	Params      string    `json:"params,omitempty"`
+	ResultCount *int      `json:"result_count,omitempty"`
 }

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"whatsapp-bridge/internal/auth"
 	"whatsapp-bridge/internal/security"
 )
 
@@ -85,10 +86,10 @@ type loginRequest struct {
 }
 
 // setSessionCookie stores the session token in an HttpOnly, SameSite=Strict
-// cookie so page scripts never see it. It is a browser-session cookie (no
-// Max-Age); the server enforces the real expiry.
+// cookie so page scripts never see it. When maxAge > 0, it sets a persistent
+// cookie matching the session TTL so page reloads don't drop the session.
 func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, maxAge int) {
-	http.SetCookie(w, &http.Cookie{
+	cookie := &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
 		Path:     "/",
@@ -96,7 +97,13 @@ func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, maxA
 		HttpOnly: true,
 		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 		SameSite: http.SameSiteStrictMode,
-	})
+	}
+	if maxAge > 0 {
+		cookie.Expires = time.Now().Add(time.Duration(maxAge) * time.Second)
+	} else if maxAge < 0 {
+		cookie.Expires = time.Unix(1, 0)
+	}
+	http.SetCookie(w, cookie)
 }
 
 // handleAuthLogin exchanges the web UI username/password (WEB_UI_USERNAME /
@@ -145,7 +152,11 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	security.LogAuthSuccess(clientIP(r), "/api/auth/login")
 
-	setSessionCookie(w, r, sess.Token, 0)
+	maxAge := int(auth.DefaultSessionTTL.Seconds())
+	if s.sessions != nil && s.sessions.TTL() > 0 {
+		maxAge = int(s.sessions.TTL().Seconds())
+	}
+	setSessionCookie(w, r, sess.Token, maxAge)
 	SendJSONSuccess(w, map[string]interface{}{
 		"expires_at": sess.ExpiresAt,
 		"username":   sess.Username,

@@ -1,30 +1,13 @@
 package database
 
 import (
-	"database/sql"
 	"testing"
 	"time"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 func newTestMessageStore(t *testing.T) *MessageStore {
 	t.Helper()
-
-	db, err := sql.Open("sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-
-	if err := createTables(db); err != nil {
-		t.Fatalf("create tables: %v", err)
-	}
-	if err := runMigrations(db); err != nil {
-		t.Fatalf("run migrations: %v", err)
-	}
-
-	return &MessageStore{db: db}
+	return newTestStore(t)
 }
 
 func TestStoreChatKeepsNewestTimestamp(t *testing.T) {

@@ -11,7 +11,10 @@ from dataclasses import dataclass, field
 
 from lib.utils import logger
 
-SCHEMA_VERSION = "1"
+# Version 2 keys messages and chunks by (instance_jid, chat_jid): one number's conversation with a
+# customer is not the same conversation as another number's. Older indexes are rebuilt from
+# messages.db, which is the source of truth.
+SCHEMA_VERSION = "2"
 VEC_TABLE = "vec_chunks"
 
 _SCHEMA_SQL = """
@@ -21,6 +24,7 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 
 CREATE TABLE IF NOT EXISTS messages_idx (
+    instance_jid TEXT NOT NULL DEFAULT '',
     message_id TEXT NOT NULL,
     chat_jid TEXT NOT NULL,
     ts INTEGER NOT NULL,
@@ -29,12 +33,12 @@ CREATE TABLE IF NOT EXISTS messages_idx (
     from_me INTEGER NOT NULL DEFAULT 0,
     text TEXT,
     chunk_id TEXT,
-    instance_jid TEXT,
     is_deleted_remote INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (chat_jid, message_id)
+    PRIMARY KEY (instance_jid, chat_jid, message_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_messages_idx_chat_ts ON messages_idx(chat_jid, ts);
+CREATE INDEX IF NOT EXISTS idx_messages_idx_chat_ts ON messages_idx(instance_jid, chat_jid, ts);
+CREATE INDEX IF NOT EXISTS idx_messages_idx_instance_ts ON messages_idx(instance_jid, ts);
 CREATE INDEX IF NOT EXISTS idx_messages_idx_chunk ON messages_idx(chunk_id);
 CREATE INDEX IF NOT EXISTS idx_messages_idx_sender ON messages_idx(sender_jid, sender_name);
 
@@ -61,6 +65,7 @@ END;
 
 CREATE TABLE IF NOT EXISTS chunks (
     chunk_id TEXT PRIMARY KEY,
+    instance_jid TEXT NOT NULL DEFAULT '',
     chat_jid TEXT NOT NULL,
     chat_name TEXT,
     is_group INTEGER NOT NULL DEFAULT 0,
@@ -72,7 +77,22 @@ CREATE TABLE IF NOT EXISTS chunks (
     embedded INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_chunks_chat_ts ON chunks(chat_jid, start_ts, end_ts);
+CREATE INDEX IF NOT EXISTS idx_chunks_chat_ts ON chunks(instance_jid, chat_jid, start_ts, end_ts);
+
+-- Per number, chat and day: how much was said. Rebuilt by the indexer for the days it touches.
+CREATE TABLE IF NOT EXISTS activity_daily (
+    instance_jid TEXT NOT NULL,
+    chat_jid TEXT NOT NULL,
+    day TEXT NOT NULL,
+    received INTEGER NOT NULL DEFAULT 0,
+    sent INTEGER NOT NULL DEFAULT 0,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    first_ts INTEGER,
+    last_ts INTEGER,
+    PRIMARY KEY (instance_jid, chat_jid, day)
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_day ON activity_daily(instance_jid, day);
 """
 
 
@@ -103,6 +123,7 @@ class IndexedMessage:
     sender_name: str
     from_me: bool
     text: str
+    # The number that captured the message; "" for messages captured before instances existed.
     instance_jid: str | None = None
     is_deleted_remote: bool = False
 
@@ -153,6 +174,7 @@ class Chunk:
     # Messages this chunk "owns" for reverse lookup (excludes overlap borrowed
     # from the previous window, since those already belong to another chunk).
     primary_message_ids: list[str] = field(default_factory=list)
+    instance_jid: str = ""
 
 
 class IndexStore:
@@ -163,11 +185,40 @@ class IndexStore:
         parent = os.path.dirname(db_path)
         if parent:
             os.makedirs(parent, exist_ok=True)
+        self._discard_outdated_index(db_path)
         self._conn = sqlite3.connect(db_path)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA busy_timeout = 5000")
         self.vec_available = load_vec_extension(self._conn)
         self._init_schema()
+
+    @staticmethod
+    def _discard_outdated_index(db_path: str) -> None:
+        """Delete an index written with an older schema so it is rebuilt from messages.db.
+
+        The index is derived data: everything in it can be recomputed. Keeping the file and altering
+        its keys in place would leave chunks that mix numbers, which is what the new schema prevents.
+        """
+        if not os.path.exists(db_path):
+            return
+        try:
+            probe = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            try:
+                row = probe.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+            finally:
+                probe.close()
+        except sqlite3.Error:
+            return  # not an index we wrote (or empty): let _init_schema create it
+        if row is None or row[0] == SCHEMA_VERSION:
+            return
+        logger.warning(
+            "search index: schema %s is outdated (current %s), rebuilding it from messages.db", row[0], SCHEMA_VERSION
+        )
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                os.remove(db_path + suffix)
+            except FileNotFoundError:
+                pass
 
     def close(self) -> None:
         self._conn.close()

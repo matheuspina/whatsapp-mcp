@@ -14,7 +14,7 @@ func (store *MessageStore) GetChatMetadata(chatJID string) (map[string]interface
 	// Total message count
 	var totalCount int
 	err := store.db.QueryRow(
-		"SELECT COUNT(*) FROM messages WHERE chat_jid = ?",
+		"SELECT COUNT(*) FROM messages_unique WHERE chat_jid = ?",
 		chatJID,
 	).Scan(&totalCount)
 	if err != nil {
@@ -25,7 +25,7 @@ func (store *MessageStore) GetChatMetadata(chatJID string) (map[string]interface
 	// Message count today
 	todayCount := 0
 	err = store.db.QueryRow(`
-		SELECT COUNT(*) FROM messages
+		SELECT COUNT(*) FROM messages_unique
 		WHERE chat_jid = ? AND date(timestamp) = date('now')
 	`, chatJID).Scan(&todayCount)
 	if err != nil {
@@ -36,7 +36,7 @@ func (store *MessageStore) GetChatMetadata(chatJID string) (map[string]interface
 	// Message count last 7 days
 	last7Count := 0
 	err = store.db.QueryRow(`
-		SELECT COUNT(*) FROM messages
+		SELECT COUNT(*) FROM messages_unique
 		WHERE chat_jid = ? AND datetime(timestamp) >= datetime('now', '-7 days')
 	`, chatJID).Scan(&last7Count)
 	if err != nil {
@@ -48,7 +48,7 @@ func (store *MessageStore) GetChatMetadata(chatJID string) (map[string]interface
 	var mediaType sql.NullString
 	var count int
 	rows, err := store.db.Query(`
-		SELECT media_type, COUNT(*) as count FROM messages
+		SELECT media_type, COUNT(*) as count FROM messages_unique
 		WHERE chat_jid = ? AND media_type != ''
 		GROUP BY media_type
 	`, chatJID)
@@ -70,7 +70,7 @@ func (store *MessageStore) GetChatMetadata(chatJID string) (map[string]interface
 	var lastTimestamp sql.NullTime
 	var lastContent sql.NullString
 	err = store.db.QueryRow(`
-		SELECT sender, timestamp, content FROM messages
+		SELECT sender, timestamp, content FROM messages_unique
 		WHERE chat_jid = ?
 		ORDER BY timestamp DESC LIMIT 1
 	`, chatJID).Scan(&lastSender, &lastTimestamp, &lastContent)
@@ -95,7 +95,7 @@ func (store *MessageStore) GetContactMetadata(senderJID string) (map[string]inte
 	// Total message count from this contact
 	var totalCount int
 	err := store.db.QueryRow(
-		"SELECT COUNT(*) FROM messages WHERE sender = ?",
+		"SELECT COUNT(*) FROM messages_unique WHERE sender = ?",
 		senderJID,
 	).Scan(&totalCount)
 	if err != nil {
@@ -106,7 +106,7 @@ func (store *MessageStore) GetContactMetadata(senderJID string) (map[string]inte
 	// Message count today
 	todayCount := 0
 	err = store.db.QueryRow(`
-		SELECT COUNT(*) FROM messages
+		SELECT COUNT(*) FROM messages_unique
 		WHERE sender = ? AND date(timestamp) = date('now')
 	`, senderJID).Scan(&todayCount)
 	if err != nil {
@@ -117,7 +117,7 @@ func (store *MessageStore) GetContactMetadata(senderJID string) (map[string]inte
 	// Message count last 7 days
 	last7Count := 0
 	err = store.db.QueryRow(`
-		SELECT COUNT(*) FROM messages
+		SELECT COUNT(*) FROM messages_unique
 		WHERE sender = ? AND datetime(timestamp) >= datetime('now', '-7 days')
 	`, senderJID).Scan(&last7Count)
 	if err != nil {
@@ -128,7 +128,7 @@ func (store *MessageStore) GetContactMetadata(senderJID string) (map[string]inte
 	// Message count last 30 days
 	last30Count := 0
 	err = store.db.QueryRow(`
-		SELECT COUNT(*) FROM messages
+		SELECT COUNT(*) FROM messages_unique
 		WHERE sender = ? AND datetime(timestamp) >= datetime('now', '-30 days')
 	`, senderJID).Scan(&last30Count)
 	if err != nil {
@@ -139,7 +139,7 @@ func (store *MessageStore) GetContactMetadata(senderJID string) (map[string]inte
 	// Days since last message
 	var lastTimestamp sql.NullTime
 	err = store.db.QueryRow(`
-		SELECT MAX(timestamp) FROM messages WHERE sender = ?
+		SELECT MAX(timestamp) FROM messages_unique WHERE sender = ?
 	`, senderJID).Scan(&lastTimestamp)
 	if err == nil && lastTimestamp.Valid {
 		daysSince := int(time.Since(lastTimestamp.Time).Hours() / 24)
@@ -150,7 +150,7 @@ func (store *MessageStore) GetContactMetadata(senderJID string) (map[string]inte
 	// Latest message preview
 	var lastContent sql.NullString
 	err = store.db.QueryRow(`
-		SELECT content FROM messages
+		SELECT content FROM messages_unique
 		WHERE sender = ?
 		ORDER BY timestamp DESC LIMIT 1
 	`, senderJID).Scan(&lastContent)

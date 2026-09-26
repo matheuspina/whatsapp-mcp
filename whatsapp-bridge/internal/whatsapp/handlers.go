@@ -119,26 +119,27 @@ func (c *Client) GetChatName(messageStore *database.MessageStore, jid types.JID,
 
 // HandleMessage processes regular incoming messages with media support and webhook processing
 func (c *Client) HandleMessage(messageStore *database.MessageStore, webhookManager interface{}, msg *events.Message) {
-	// Save message to database
 	chatJID := msg.Info.Chat.String()
 	sender := msg.Info.Sender.User
+	instanceJID := c.InstanceJID()
 
-	// Check for message revocation (anti-delete audit)
-	if msg.Message != nil && msg.Message.ProtocolMessage != nil {
-		pm := msg.Message.ProtocolMessage
-		if pm.GetType() == waE2E.ProtocolMessage_REVOKE && pm.Key != nil && pm.Key.ID != nil {
-			revokedID := *pm.Key.ID
-			c.logger.Infof("Message revoked remotely: ID=%s in Chat=%s. Marking as deleted.", revokedID, chatJID)
-			if err := messageStore.MarkMessageRemoteDeleted(revokedID, chatJID); err != nil {
-				c.logger.Warnf("Failed to mark message %s as remotely deleted: %v", revokedID, err)
-			}
-			return
-		}
+	// Numbers whose corporate-asset attestation is missing are not captured when the
+	// deployment requires it.
+	if !messageStore.CaptureAllowed(instanceJID) {
+		return
 	}
 
-	instanceJID := ""
-	if c.Store != nil && c.Store.ID != nil {
-		instanceJID = c.Store.ID.ToNonAD().String()
+	// Revocations and edits are protocol messages about an earlier message: they update its audit
+	// state instead of being stored as messages of their own.
+	if pm := msg.Message.GetProtocolMessage(); pm != nil {
+		switch pm.GetType() {
+		case waE2E.ProtocolMessage_REVOKE:
+			c.handleRevoke(messageStore, instanceJID, chatJID, pm, msg)
+			return
+		case waE2E.ProtocolMessage_MESSAGE_EDIT:
+			c.handleEdit(messageStore, instanceJID, chatJID, pm, msg)
+			return
+		}
 	}
 
 	// Get appropriate chat name (pass nil for conversation since we don't have one for regular messages)
@@ -208,6 +209,42 @@ func (c *Client) HandleMessage(messageStore *database.MessageStore, webhookManag
 	}
 }
 
+// handleRevoke flags the revoked message as deleted, keeping its text.
+func (c *Client) handleRevoke(messageStore *database.MessageStore, instanceJID, chatJID string, pm *waE2E.ProtocolMessage, msg *events.Message) {
+	revokedID := pm.GetKey().GetID()
+	if revokedID == "" {
+		return
+	}
+	found, err := messageStore.MarkMessageRemoteDeleted(instanceJID, revokedID, chatJID, msg.Info.Sender.User, msg.Info.Timestamp)
+	switch {
+	case err != nil:
+		c.logger.Warnf("Failed to mark message %s as remotely deleted: %v", revokedID, err)
+	case !found:
+		c.logger.Debugf("Revoke for unknown message %s in %s (instance %s)", revokedID, chatJID, instanceJID)
+	default:
+		c.logger.Infof("Message %s revoked by %s in %s", revokedID, msg.Info.Sender.User, chatJID)
+	}
+}
+
+// handleEdit records the earlier text of an edited message and applies the new one.
+func (c *Client) handleEdit(messageStore *database.MessageStore, instanceJID, chatJID string, pm *waE2E.ProtocolMessage, msg *events.Message) {
+	editedID := pm.GetKey().GetID()
+	if editedID == "" || pm.GetEditedMessage() == nil {
+		return
+	}
+	newContent := ExtractTextContent(pm.GetEditedMessage())
+	if newContent == "" {
+		return
+	}
+	found, err := messageStore.RecordMessageEdit(instanceJID, chatJID, editedID, newContent, msg.Info.Timestamp)
+	switch {
+	case err != nil:
+		c.logger.Warnf("Failed to record edit of message %s: %v", editedID, err)
+	case !found:
+		c.logger.Debugf("Edit for unknown message %s in %s (instance %s)", editedID, chatJID, instanceJID)
+	}
+}
+
 // HandleHistorySync processes history sync events
 func (c *Client) HandleHistorySync(messageStore *database.MessageStore, historySync *events.HistorySync) {
 	c.logger.Infof("Received history sync event with %d conversations", len(historySync.Data.Conversations))
@@ -238,12 +275,14 @@ func (c *Client) HandleHistorySync(messageStore *database.MessageStore, historyS
 				continue
 			}
 
-			instanceJID := ""
-			if c.Store != nil && c.Store.ID != nil {
-				instanceJID = c.Store.ID.ToNonAD().String()
+			instanceJID := c.InstanceJID()
+			if !messageStore.CaptureAllowed(instanceJID) {
+				continue
 			}
 
-			if err := messageStore.StoreChatWithInstance(chatJID, name, timestamp, instanceJID); err != nil {
+			// History sync is bulk work: writes are queued without waiting for each commit, so
+			// the sync is not throttled to one fsync per message and never delays live messages.
+			if err := messageStore.StoreChatBulk(chatJID, name, timestamp, instanceJID); err != nil {
 				c.logger.Warnf("Failed to store chat: %v", err)
 			}
 

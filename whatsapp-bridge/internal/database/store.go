@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -13,6 +14,9 @@ import (
 type MessageStore struct {
 	db     *sql.DB
 	writer *writerQueue
+
+	// requireCorporateConfirmation gates message capture on the corporate-asset attestation.
+	requireCorporateConfirmation atomic.Bool
 }
 
 // NewMessageStore initializes a new message store with SQLite database
@@ -42,10 +46,16 @@ func NewMessageStore() (*MessageStore, error) {
 		return nil, fmt.Errorf("failed to run migrations: %v", err)
 	}
 
-	// Create indexes after tables and migrations are applied
+	// Versioned schema migrations (organization, instance-scoped keys, governance)
+	if err = applySchemaMigrations(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to apply schema migrations: %w", err)
+	}
+
+	// Indexes come last: they reference columns added by the migrations above.
 	if err = createIndexes(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to create indexes: %v", err)
+		return nil, fmt.Errorf("failed to create indexes: %w", err)
 	}
 
 	store := &MessageStore{db: db}
@@ -108,18 +118,6 @@ func runMigrations(db *sql.DB) error {
 			name: "direct_path",
 			sql:  `ALTER TABLE messages ADD COLUMN direct_path TEXT`,
 		},
-		{
-			name: "instance_jid",
-			sql:  `ALTER TABLE messages ADD COLUMN instance_jid TEXT`,
-		},
-		{
-			name: "is_deleted_remote",
-			sql:  `ALTER TABLE messages ADD COLUMN is_deleted_remote BOOLEAN DEFAULT 0`,
-		},
-		{
-			name: "chat_instance_jid",
-			sql:  `ALTER TABLE chats ADD COLUMN instance_jid TEXT`,
-		},
 	}
 
 	for _, m := range migrations {
@@ -130,39 +128,17 @@ func runMigrations(db *sql.DB) error {
 		}
 	}
 
-	// Ensure organization tables and indexes exist for migrated databases
+	// Ensure web_sessions table exists for migrated databases
 	_, _ = db.Exec(`
-		CREATE TABLE IF NOT EXISTS departments (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			description TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE IF NOT EXISTS employees (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			department_id INTEGER,
-			name TEXT NOT NULL,
-			role TEXT,
-			email TEXT,
-			active BOOLEAN DEFAULT 1,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL
-		);
-
-		CREATE TABLE IF NOT EXISTS instances (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			phone_jid TEXT UNIQUE NOT NULL,
-			employee_id INTEGER,
-			alias TEXT,
-			status TEXT DEFAULT 'disconnected',
-			paired_at TIMESTAMP,
-			last_seen_at TIMESTAMP,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
+		CREATE TABLE IF NOT EXISTS web_sessions (
+			token TEXT PRIMARY KEY,
+			id TEXT UNIQUE NOT NULL,
+			username TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL,
+			last_seen_at TIMESTAMP NOT NULL,
+			expires_at TIMESTAMP NOT NULL,
+			ip TEXT,
+			user_agent TEXT
 		);
 	`)
 
@@ -175,8 +151,7 @@ func createTables(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS chats (
 			jid TEXT PRIMARY KEY,
 			name TEXT,
-			last_message_time TIMESTAMP,
-			instance_jid TEXT
+			last_message_time TIMESTAMP
 		);
 
 		CREATE TABLE IF NOT EXISTS messages (
@@ -205,43 +180,8 @@ func createTables(db *sql.DB) error {
 			forwarded_from TEXT,
 			is_system_message BOOLEAN DEFAULT 0,
 			system_message_type TEXT,
-			instance_jid TEXT,
-			is_deleted_remote BOOLEAN DEFAULT 0,
 			PRIMARY KEY (id, chat_jid),
 			FOREIGN KEY (chat_jid) REFERENCES chats(jid)
-		);
-
-		CREATE TABLE IF NOT EXISTS departments (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			description TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE IF NOT EXISTS employees (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			department_id INTEGER,
-			name TEXT NOT NULL,
-			role TEXT,
-			email TEXT,
-			active BOOLEAN DEFAULT 1,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL
-		);
-
-		CREATE TABLE IF NOT EXISTS instances (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			phone_jid TEXT UNIQUE NOT NULL,
-			employee_id INTEGER,
-			alias TEXT,
-			status TEXT DEFAULT 'disconnected',
-			paired_at TIMESTAMP,
-			last_seen_at TIMESTAMP,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
 		);
 
 		CREATE TABLE IF NOT EXISTS contact_nicknames (
@@ -284,31 +224,44 @@ func createTables(db *sql.DB) error {
 			delivered_at TIMESTAMP,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);
+
+		CREATE TABLE IF NOT EXISTS web_sessions (
+			token TEXT PRIMARY KEY,
+			id TEXT UNIQUE NOT NULL,
+			username TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL,
+			last_seen_at TIMESTAMP NOT NULL,
+			expires_at TIMESTAMP NOT NULL,
+			ip TEXT,
+			user_agent TEXT
+		);
 	`)
 	return err
 }
 
-// createIndexes creates all indexes after tables and migration columns are guaranteed to exist
+// createIndexes creates the baseline indexes. Indexes that depend on migration-added
+// columns are created by the migrations themselves.
 func createIndexes(db *sql.DB) error {
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_media_type ON messages(media_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_chats_last_message_time ON chats(last_message_time DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_messages_instance_chat ON messages(instance_jid, chat_jid, timestamp DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_messages_is_deleted ON messages(is_deleted_remote)`,
-		`CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_instances_employee ON instances(employee_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_jid, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_instance_ts ON messages(instance_jid, timestamp DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_ts ON messages(timestamp DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_deleted ON messages(is_deleted_remote) WHERE is_deleted_remote = 1`,
+		`CREATE INDEX IF NOT EXISTS idx_web_sessions_expires ON web_sessions(expires_at)`,
 	}
 	for _, idx := range indexes {
 		if _, err := db.Exec(idx); err != nil {
-			return fmt.Errorf("failed to create index (%s): %w", idx, err)
+			return fmt.Errorf("index (%s): %w", idx, err)
 		}
 	}
 	return nil
 }
 
-// Close the database connection and cleanly flush the writer queue
+// Close flushes the writer queue and closes the database connection.
 func (store *MessageStore) Close() error {
 	if store.writer != nil {
 		store.writer.close()

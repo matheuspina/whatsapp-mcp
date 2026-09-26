@@ -420,7 +420,10 @@ func (c *Client) SendMessage(messageStore *database.MessageStore, recipient stri
 		sender = c.Store.ID.ToNonAD().String()
 	}
 
-	_ = messageStore.StoreMessage(
+	// The chat may not exist yet (first message to a new contact) and messages reference it.
+	instanceJID := c.InstanceJID()
+	_ = messageStore.StoreChatWithInstance(recipientJID.String(), "", sendResp.Timestamp, instanceJID)
+	_ = messageStore.StoreMessageWithInstance(
 		sendResp.ID, // Use the ID from SendResponse
 		recipientJID.String(),
 		sender,
@@ -436,6 +439,8 @@ func (c *Client) SendMessage(messageStore *database.MessageStore, recipient stri
 		fileSHA256,
 		fileEncSHA256,
 		fileLength,
+		instanceJID,
+		false,
 	)
 
 	return bridgeTypes.SendResult{

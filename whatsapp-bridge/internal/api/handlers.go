@@ -52,7 +52,7 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Presence is handled centrally by the client's presence manager.
-	result := s.client.SendMessage(s.messageStore, req.Recipient, req.Message, req.MediaPath, req.QuotedMessageID, req.MentionedJIDs)
+	result := s.cl(r).SendMessage(s.messageStore, req.Recipient, req.Message, req.MediaPath, req.QuotedMessageID, req.MentionedJIDs)
 
 	// Set response headers
 	w.Header().Set("Content-Type", "application/json")
@@ -363,7 +363,7 @@ func (s *Server) handleReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.client.SendReaction(s.messageStore, req.ChatJID, req.MessageID, req.Emoji); err != nil {
+	if err := s.cl(r).SendReaction(s.messageStore, req.ChatJID, req.MessageID, req.Emoji); err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to send reaction: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -401,7 +401,7 @@ func (s *Server) handleEditMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.client.EditMessage(req.ChatJID, req.MessageID, req.NewContent); err != nil {
+	if err := s.cl(r).EditMessage(req.ChatJID, req.MessageID, req.NewContent); err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to edit message: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -439,7 +439,7 @@ func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.client.DeleteMessage(req.ChatJID, req.MessageID, req.SenderJID); err != nil {
+	if err := s.cl(r).DeleteMessage(req.ChatJID, req.MessageID, req.SenderJID); err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to delete message: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -474,7 +474,7 @@ func (s *Server) handleGetGroupInfo(w http.ResponseWriter, r *http.Request) {
 
 	groupJID := pathParts[0]
 
-	groupInfo, err := s.client.GetGroupInfo(groupJID)
+	groupInfo, err := s.cl(r).GetGroupInfo(groupJID)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to get group info: %v", err), http.StatusInternalServerError)
 		return
@@ -536,7 +536,7 @@ func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 	receiptType := strings.ToLower(strings.TrimSpace(req.ReceiptType))
 	switch receiptType {
 	case "", "read":
-		if err := s.client.MarkMessagesRead(req.ChatJID, req.MessageIDs, req.SenderJID); err != nil {
+		if err := s.cl(r).MarkMessagesRead(req.ChatJID, req.MessageIDs, req.SenderJID); err != nil {
 			SendJSONError(w, fmt.Sprintf("Failed to mark messages as read: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -545,7 +545,7 @@ func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 			"message": "Messages marked as read",
 		})
 	case "played":
-		if err := s.client.MarkMessagesPlayed(req.ChatJID, req.MessageIDs, req.SenderJID); err != nil {
+		if err := s.cl(r).MarkMessagesPlayed(req.ChatJID, req.MessageIDs, req.SenderJID); err != nil {
 			SendJSONError(w, fmt.Sprintf("Failed to mark messages as played: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -586,7 +586,7 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groupInfo, err := s.client.CreateGroup(req.Name, req.Participants)
+	groupInfo, err := s.cl(r).CreateGroup(req.Name, req.Participants)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to create group: %v", err), http.StatusInternalServerError)
 		return
@@ -625,7 +625,7 @@ func (s *Server) handleAddGroupMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.client.AddGroupParticipants(req.GroupJID, req.Participants)
+	results, err := s.cl(r).AddGroupParticipants(req.GroupJID, req.Participants)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to add members: %v", err), http.StatusInternalServerError)
 		return
@@ -672,7 +672,7 @@ func (s *Server) handleRemoveGroupMembers(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	results, err := s.client.RemoveGroupParticipants(req.GroupJID, req.Participants)
+	results, err := s.cl(r).RemoveGroupParticipants(req.GroupJID, req.Participants)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to remove members: %v", err), http.StatusInternalServerError)
 		return
@@ -718,7 +718,7 @@ func (s *Server) handlePromoteAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.client.PromoteGroupParticipant(req.GroupJID, req.Participant)
+	_, err := s.cl(r).PromoteGroupParticipant(req.GroupJID, req.Participant)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to promote admin: %v", err), http.StatusInternalServerError)
 		return
@@ -758,7 +758,7 @@ func (s *Server) handleDemoteAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := s.client.DemoteGroupParticipant(req.GroupJID, req.Participant)
+	_, err := s.cl(r).DemoteGroupParticipant(req.GroupJID, req.Participant)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to demote admin: %v", err), http.StatusInternalServerError)
 		return
@@ -797,7 +797,7 @@ func (s *Server) handleLeaveGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.client.LeaveGroup(req.GroupJID)
+	err := s.cl(r).LeaveGroup(req.GroupJID)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to leave group: %v", err), http.StatusInternalServerError)
 		return
@@ -845,13 +845,13 @@ func (s *Server) handleUpdateGroup(w http.ResponseWriter, r *http.Request) {
 	var errors []string
 
 	if req.Name != "" {
-		if err := s.client.SetGroupName(req.GroupJID, req.Name); err != nil {
+		if err := s.cl(r).SetGroupName(req.GroupJID, req.Name); err != nil {
 			errors = append(errors, fmt.Sprintf("name: %v", err))
 		}
 	}
 
 	if req.Topic != "" {
-		if err := s.client.SetGroupTopic(req.GroupJID, req.Topic); err != nil {
+		if err := s.cl(r).SetGroupTopic(req.GroupJID, req.Topic); err != nil {
 			errors = append(errors, fmt.Sprintf("topic: %v", err))
 		}
 	}
@@ -902,7 +902,7 @@ func (s *Server) handleCreatePoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.client.CreatePoll(req.ChatJID, req.Question, req.Options, req.MultiSelect)
+	result, err := s.cl(r).CreatePoll(req.ChatJID, req.Question, req.Options, req.MultiSelect)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to create poll: %v", err), http.StatusInternalServerError)
 		return
@@ -953,7 +953,7 @@ func (s *Server) handleRequestHistory(w http.ResponseWriter, r *http.Request) {
 		req.Count = 50
 	}
 
-	err := s.client.RequestChatHistory(req.ChatJID, req.OldestMsgID, req.OldestMsgFromMe, req.OldestMsgSender, req.OldestMsgTimestamp, req.Count)
+	err := s.cl(r).RequestChatHistory(req.ChatJID, req.OldestMsgID, req.OldestMsgFromMe, req.OldestMsgSender, req.OldestMsgTimestamp, req.Count)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to request history: %v", err), http.StatusInternalServerError)
 		return
@@ -994,7 +994,7 @@ func (s *Server) handleSetPresence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.client.SetPresence(req.Presence)
+	err := s.cl(r).SetPresence(req.Presence)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to set presence: %v", err), http.StatusInternalServerError)
 		return
@@ -1031,7 +1031,7 @@ func (s *Server) handleSubscribePresence(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err := s.client.SubscribeToPresence(req.JID)
+	err := s.cl(r).SubscribeToPresence(req.JID)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to subscribe to presence: %v", err), http.StatusInternalServerError)
 		return
@@ -1080,7 +1080,7 @@ func (s *Server) handleGetProfilePicture(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	info, err := s.client.GetProfilePicture(jid, preview)
+	info, err := s.cl(r).GetProfilePicture(jid, preview)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to get profile picture: %v", err), http.StatusInternalServerError)
 		return
@@ -1117,7 +1117,7 @@ func (s *Server) handleGetBlocklist(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	users, err := s.client.GetBlockedUsers()
+	users, err := s.cl(r).GetBlockedUsers()
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to get blocklist: %v", err), http.StatusInternalServerError)
 		return
@@ -1156,7 +1156,7 @@ func (s *Server) handleUpdateBlocklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.client.UpdateBlockedUser(req.JID, req.Action)
+	err := s.cl(r).UpdateBlockedUser(req.JID, req.Action)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to update blocklist: %v", err), http.StatusInternalServerError)
 		return
@@ -1194,7 +1194,7 @@ func (s *Server) handleFollowNewsletter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err := s.client.FollowNewsletterChannel(req.JID)
+	err := s.cl(r).FollowNewsletterChannel(req.JID)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to follow newsletter: %v", err), http.StatusInternalServerError)
 		return
@@ -1232,7 +1232,7 @@ func (s *Server) handleUnfollowNewsletter(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err := s.client.UnfollowNewsletterChannel(req.JID)
+	err := s.cl(r).UnfollowNewsletterChannel(req.JID)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to unfollow newsletter: %v", err), http.StatusInternalServerError)
 		return
@@ -1271,7 +1271,7 @@ func (s *Server) handleCreateNewsletter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	info, err := s.client.CreateNewsletterChannel(req.Name, req.Description)
+	info, err := s.cl(r).CreateNewsletterChannel(req.Name, req.Description)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to create newsletter: %v", err), http.StatusInternalServerError)
 		return
@@ -1318,7 +1318,7 @@ func (s *Server) handleSendTyping(w http.ResponseWriter, r *http.Request) {
 		req.State = "typing"
 	}
 
-	err := s.client.SendTypingIndicator(req.ChatJID, req.State)
+	err := s.cl(r).SendTypingIndicator(req.ChatJID, req.State)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to send typing indicator: %v", err), http.StatusInternalServerError)
 		return
@@ -1351,7 +1351,7 @@ func (s *Server) handleSetAbout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.client.SetAboutText(req.Text)
+	err := s.cl(r).SetAboutText(req.Text)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to set about text: %v", err), http.StatusInternalServerError)
 		return
@@ -1394,7 +1394,7 @@ func (s *Server) handleSetDisappearingTimer(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err := s.client.SetDisappearingTimer(req.ChatJID, req.Duration)
+	err := s.cl(r).SetDisappearingTimer(req.ChatJID, req.Duration)
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to set disappearing timer: %v", err), http.StatusInternalServerError)
 		return
@@ -1418,7 +1418,7 @@ func (s *Server) handleGetPrivacySettings(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 
-	settings, err := s.client.GetPrivacySettings()
+	settings, err := s.cl(r).GetPrivacySettings()
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to fetch privacy settings: %v", err), http.StatusInternalServerError)
 		return
@@ -1458,9 +1458,9 @@ func (s *Server) handlePinChat(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	if req.Pin {
-		err = s.client.PinChat(req.ChatJID)
+		err = s.cl(r).PinChat(req.ChatJID)
 	} else {
-		err = s.client.UnpinChat(req.ChatJID)
+		err = s.cl(r).UnpinChat(req.ChatJID)
 	}
 
 	if err != nil {
@@ -1508,9 +1508,9 @@ func (s *Server) handleMuteChat(w http.ResponseWriter, r *http.Request) {
 			SendJSONError(w, "duration is required when muting", http.StatusBadRequest)
 			return
 		}
-		err = s.client.MuteChat(req.ChatJID, req.Duration)
+		err = s.cl(r).MuteChat(req.ChatJID, req.Duration)
 	} else {
-		err = s.client.UnmuteChat(req.ChatJID)
+		err = s.cl(r).UnmuteChat(req.ChatJID)
 	}
 
 	if err != nil {
@@ -1558,9 +1558,9 @@ func (s *Server) handleArchiveChat(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	if req.Archive {
-		err = s.client.ArchiveChat(req.ChatJID)
+		err = s.cl(r).ArchiveChat(req.ChatJID)
 	} else {
-		err = s.client.UnarchiveChat(req.ChatJID)
+		err = s.cl(r).UnarchiveChat(req.ChatJID)
 	}
 
 	if err != nil {
@@ -1596,7 +1596,7 @@ func (s *Server) handlePairPhone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, err := s.client.PairWithPhone(req.PhoneNumber)
+	code, err := s.cl(r).PairWithPhone(req.PhoneNumber)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -1624,7 +1624,7 @@ func (s *Server) handlePairingStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inProgress, code, expiresIn, complete, err := s.client.GetPairingStatus()
+	inProgress, code, expiresIn, complete, err := s.cl(r).GetPairingStatus()
 
 	resp := types.PairingStatusResponse{
 		Success:    true,
@@ -1650,15 +1650,29 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	connected := s.client.IsConnected()
-	needsPairing := s.client.Store.ID == nil
-	startedAt, lastConn, discAt, reconnErrs := s.client.ConnectionState()
+	// With several numbers the service is healthy while at least one is connected: a single
+	// number dropping must not make the container look dead and get it restarted.
+	rep := s.healthClient()
+	connected := rep.IsConnected()
+	pairedCount, connectedCount := 0, 0
+	if s.instanceManager != nil {
+		for _, c := range s.instanceManager.ListPairedClients() {
+			pairedCount++
+			if c.IsConnected() {
+				connectedCount++
+			}
+		}
+		connected = connectedCount > 0 || (pairedCount == 0 && connected)
+	}
+	needsPairing := rep.Store.ID == nil && pairedCount == 0
+	startedAt, lastConn, discAt, reconnErrs := rep.ConnectionState()
 
 	resp := map[string]interface{}{
-		"connected":     connected,
-		"needs_pairing": needsPairing, // true when Store.ID == nil: QR or pairing code required
-		"uptime":        time.Since(startedAt).Round(time.Second).String(),
+		"connected":      connected,
+		"needs_pairing":  needsPairing, // true when Store.ID == nil: QR or pairing code required
+		"uptime":         time.Since(startedAt).Round(time.Second).String(),
 		"reconnect_errs": reconnErrs,
+		"instances":      map[string]int{"paired": pairedCount, "connected": connectedCount},
 	}
 	if !lastConn.IsZero() {
 		resp["last_connected"] = lastConn.Format(time.RFC3339)
@@ -1682,11 +1696,15 @@ func (s *Server) handleReconnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.client.Disconnect()
+	c := s.cl(r)
+	if s.instanceManager != nil {
+		s.instanceManager.SetManuallyDisconnected(c, false)
+	}
+	c.Disconnect()
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		if err := s.client.Client.Connect(); err != nil {
+		if err := c.Client.Connect(); err != nil {
 			fmt.Printf("Reconnect failed: %v\n", err)
 		}
 	}()
@@ -1706,9 +1724,9 @@ func (s *Server) handleConnectionStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	connected := s.client.IsConnected()
-	linked := s.client.Store.ID != nil
-	startedAt, lastConn, discAt, reconnErrs := s.client.ConnectionState()
+	connected := s.cl(r).IsConnected()
+	linked := s.cl(r).Store.ID != nil
+	startedAt, lastConn, discAt, reconnErrs := s.cl(r).ConnectionState()
 
 	resp := types.ConnectionStatusResponse{
 		Success:             true,
@@ -1720,7 +1738,7 @@ func (s *Server) handleConnectionStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if linked {
-		resp.JID = s.client.Store.ID.String()
+		resp.JID = s.cl(r).Store.ID.String()
 	}
 	if !lastConn.IsZero() {
 		resp.LastConnected = lastConn.Format(time.RFC3339)
@@ -1959,7 +1977,18 @@ func (s *Server) handleGetChats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	chatMap, err := s.messageStore.GetChats()
+	var chatMap map[string]time.Time
+	var err error
+	if ref := instanceRef(r); ref != "" && s.instanceManager != nil {
+		c, resolveErr := s.instanceManager.ResolveClient(ref)
+		if resolveErr != nil {
+			SendJSONError(w, "instance not found: "+ref, http.StatusNotFound)
+			return
+		}
+		chatMap, err = s.messageStore.ListChatsForInstance(c.InstanceJID())
+	} else {
+		chatMap, err = s.messageStore.GetChats()
+	}
 	if err != nil {
 		SendJSONError(w, fmt.Sprintf("Failed to retrieve chats: %v", err), http.StatusInternalServerError)
 		return

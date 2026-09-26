@@ -29,6 +29,16 @@ type Session struct {
 	UserAgent  string
 }
 
+// Store defines persistence operations for web UI sessions
+type Store interface {
+	SaveSession(s *Session) error
+	UpdateSession(token string, lastSeen, expiresAt time.Time) error
+	DeleteSession(token string) error
+	DeleteSessionByID(id string) error
+	LoadSessions(now time.Time) ([]*Session, error)
+	PurgeExpired(now time.Time) error
+}
+
 // Manager keeps the set of active sessions.
 type Manager struct {
 	mu       sync.RWMutex
@@ -38,21 +48,45 @@ type Manager struct {
 	now      func() time.Time
 	stopOnce sync.Once
 	stopCh   chan struct{}
+	store    Store
 }
 
 // NewManager creates a session manager. A non-positive ttl uses DefaultSessionTTL.
 // Sessions use a sliding expiry: every successful Validate pushes ExpiresAt out by ttl.
 func NewManager(ttl time.Duration) *Manager {
+	return NewManagerWithStore(ttl, nil)
+}
+
+// NewManagerWithStore creates a session manager backed by an optional persistent Store.
+// If store is non-nil, existing non-expired sessions are preloaded on startup.
+func NewManagerWithStore(ttl time.Duration, store Store) *Manager {
 	if ttl <= 0 {
 		ttl = DefaultSessionTTL
 	}
-	return &Manager{
+	m := &Manager{
 		byToken: make(map[string]*Session),
 		tokenOf: make(map[string]string),
 		ttl:     ttl,
 		now:     time.Now,
 		stopCh:  make(chan struct{}),
+		store:   store,
 	}
+
+	if store != nil {
+		if sessions, err := store.LoadSessions(m.now()); err == nil {
+			for _, s := range sessions {
+				m.byToken[s.Token] = s
+				m.tokenOf[s.ID] = s.Token
+			}
+		}
+	}
+
+	return m
+}
+
+// TTL returns the configured session duration.
+func (m *Manager) TTL() time.Duration {
+	return m.ttl
 }
 
 func randomHex(n int) (string, error) {
@@ -90,6 +124,11 @@ func (m *Manager) Create(username, ip, userAgent string) (*Session, error) {
 	m.byToken[token] = s
 	m.tokenOf[id] = token
 	m.mu.Unlock()
+
+	if m.store != nil {
+		_ = m.store.SaveSession(s)
+	}
+
 	return s, nil
 }
 
@@ -110,11 +149,23 @@ func (m *Manager) Validate(token string) (*Session, bool) {
 	now := m.now()
 	if !now.Before(s.ExpiresAt) {
 		m.removeLocked(s)
+		if m.store != nil {
+			go func(tok string) {
+				_ = m.store.DeleteSession(tok)
+			}(token)
+		}
 		return nil, false
 	}
 	s.LastSeenAt = now
 	s.ExpiresAt = now.Add(m.ttl)
 	cp := *s
+
+	if m.store != nil {
+		go func(tok string, ls, exp time.Time) {
+			_ = m.store.UpdateSession(tok, ls, exp)
+		}(token, s.LastSeenAt, s.ExpiresAt)
+	}
+
 	return &cp, true
 }
 
@@ -127,6 +178,11 @@ func (m *Manager) Revoke(token string) bool {
 		return false
 	}
 	m.removeLocked(s)
+	if m.store != nil {
+		go func(tok string) {
+			_ = m.store.DeleteSession(tok)
+		}(token)
+	}
 	return true
 }
 
@@ -139,6 +195,11 @@ func (m *Manager) RevokeByID(id string) bool {
 		return false
 	}
 	m.removeLocked(m.byToken[token])
+	if m.store != nil {
+		go func(tok string) {
+			_ = m.store.DeleteSession(tok)
+		}(token)
+	}
 	return true
 }
 
@@ -176,6 +237,11 @@ func (m *Manager) purgeExpired() {
 		if !now.Before(s.ExpiresAt) {
 			m.removeLocked(s)
 		}
+	}
+	if m.store != nil {
+		go func(t time.Time) {
+			_ = m.store.PurgeExpired(t)
+		}(now)
 	}
 }
 

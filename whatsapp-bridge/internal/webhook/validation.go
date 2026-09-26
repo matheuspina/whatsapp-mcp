@@ -129,7 +129,7 @@ func (wm *Manager) ValidateWebhookConfig(config *types.WebhookConfig) error {
 			return fmt.Errorf("trigger type is required")
 		}
 
-		validTypes := []string{"all", "chat_jid", "sender", "keyword", "media_type"}
+		validTypes := []string{"all", "chat_jid", "instance_jid", "sender", "keyword", "media_type"}
 		valid := false
 		for _, validType := range validTypes {
 			if trigger.TriggerType == validType {

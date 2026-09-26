@@ -113,8 +113,22 @@ func NewClientWithConfig(logger waLog.Logger, cfg *config.Config) (*Client, erro
 	return NewClientForDevice(deviceStore, logger, cfg)
 }
 
+// ClientOptions tune how a Client is built for a device.
+type ClientOptions struct {
+	// AntibanStatePath overrides where the send warm-up state is persisted. Each number has its
+	// own warm-up history, so numbers must not share one file. Empty keeps the configured path.
+	AntibanStatePath string
+	// NoAntibanPersistence keeps the warm-up state in memory only (numbers still pairing).
+	NoAntibanPersistence bool
+}
+
 // NewClientForDevice creates a Client instance for a given device store.
 func NewClientForDevice(deviceStore *store.Device, logger waLog.Logger, cfg *config.Config) (*Client, error) {
+	return NewClientForDeviceWithOptions(deviceStore, logger, cfg, ClientOptions{})
+}
+
+// NewClientForDeviceWithOptions creates a Client instance for a device with explicit options.
+func NewClientForDeviceWithOptions(deviceStore *store.Device, logger waLog.Logger, cfg *config.Config, opts ClientOptions) (*Client, error) {
 	// Create client instance
 	client := whatsmeow.NewClient(deviceStore, logger)
 	if client == nil {
@@ -122,6 +136,12 @@ func NewClientForDevice(deviceStore *store.Device, logger waLog.Logger, cfg *con
 	}
 
 	antibanCfg := antiban.LoadConfig()
+	if opts.AntibanStatePath != "" {
+		antibanCfg.WarmUpStatePath = opts.AntibanStatePath
+	}
+	if opts.NoAntibanPersistence {
+		antibanCfg.WarmUpStatePath = ""
+	}
 	antibanInterceptor, antibanErr := antiban.NewSendInterceptor(antibanCfg)
 	if antibanErr != nil {
 		logger.Warnf("Failed to initialize antiban, continuing without protection: %v", antibanErr)
@@ -167,6 +187,14 @@ func NewClientForDevice(deviceStore *store.Device, logger waLog.Logger, cfg *con
 	}
 
 	return c, nil
+}
+
+// InstanceJID returns the JID of the number this client is logged in as, or "" while unpaired.
+func (c *Client) InstanceJID() string {
+	if c == nil || c.Store == nil || c.Store.ID == nil {
+		return ""
+	}
+	return c.Store.ID.ToNonAD().String()
 }
 
 // SetCircuitBreakerCallback registers a function called just before AutoReconnect gives up

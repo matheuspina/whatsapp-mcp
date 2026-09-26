@@ -80,6 +80,12 @@ func (wm *Manager) GetWebhookConfigs() []*types.WebhookConfig {
 
 // MatchesTriggers checks if a message matches any webhook triggers
 func (wm *Manager) MatchesTriggers(msg *events.Message, chatName string) []*types.WebhookConfig {
+	return wm.MatchesTriggersForInstance(msg, chatName, "")
+}
+
+// MatchesTriggersForInstance is MatchesTriggers for a message captured by a specific number,
+// which lets "instance_jid" triggers restrict a webhook to one number.
+func (wm *Manager) MatchesTriggersForInstance(msg *events.Message, chatName, instanceJID string) []*types.WebhookConfig {
 	wm.mutex.RLock()
 	defer wm.mutex.RUnlock()
 
@@ -100,7 +106,7 @@ func (wm *Manager) MatchesTriggers(msg *events.Message, chatName string) []*type
 				continue
 			}
 
-			if wm.matchesTrigger(trigger, msg, content, mediaType, chatName) {
+			if wm.matchesTrigger(trigger, msg, content, mediaType, chatName, instanceJID) {
 				matched = true
 				break
 			}
@@ -115,13 +121,16 @@ func (wm *Manager) MatchesTriggers(msg *events.Message, chatName string) []*type
 }
 
 // matchesTrigger checks if a single trigger matches the message
-func (wm *Manager) matchesTrigger(trigger types.WebhookTrigger, msg *events.Message, content, mediaType, chatName string) bool {
+func (wm *Manager) matchesTrigger(trigger types.WebhookTrigger, msg *events.Message, content, mediaType, chatName, instanceJID string) bool {
 	switch trigger.TriggerType {
 	case "all":
 		return true
 
 	case "chat_jid":
 		return wm.matchesString(msg.Info.Chat.String(), trigger.TriggerValue, trigger.MatchType)
+
+	case "instance_jid":
+		return wm.matchesString(instanceJID, trigger.TriggerValue, trigger.MatchType)
 
 	case "sender":
 		senderJID := msg.Info.Sender.String()
@@ -212,8 +221,13 @@ func (wm *Manager) DeliverConnectionEvent(payload *types.ConnectionEventPayload)
 func (wm *Manager) ProcessMessage(client interface{}, msg *events.Message, chatName string) {
 	startTime := time.Now()
 
+	instanceJID := ""
+	if c, ok := client.(interface{ InstanceJID() string }); ok {
+		instanceJID = c.InstanceJID()
+	}
+
 	// Find matching webhook configurations
-	matchedConfigs := wm.MatchesTriggers(msg, chatName)
+	matchedConfigs := wm.MatchesTriggersForInstance(msg, chatName, instanceJID)
 	if len(matchedConfigs) == 0 {
 		return
 	}
@@ -247,6 +261,7 @@ func (wm *Manager) ProcessMessage(client interface{}, msg *events.Message, chatN
 			Filename:        filename,
 			QuotedMessageID: quotedMsgID,
 			QuotedSender:    quotedSender,
+			InstanceJID:     instanceJID,
 		},
 		Metadata: types.WebhookMetadata{
 			ProcessingTimeMs: time.Since(startTime).Milliseconds(),
@@ -275,7 +290,7 @@ func (wm *Manager) ProcessMessage(client interface{}, msg *events.Message, chatN
 		mediaType, _, _, _, _, _, _, _ := whatsapp.ExtractMediaInfo(msg.Message)
 
 		for _, trigger := range config.Triggers {
-			if trigger.Enabled && wm.matchesTrigger(trigger, msg, content, mediaType, chatName) {
+			if trigger.Enabled && wm.matchesTrigger(trigger, msg, content, mediaType, chatName, instanceJID) {
 				matchedTrigger = &trigger
 				break
 			}

@@ -71,7 +71,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	)
 	row := s.messageStore.GetDB().QueryRow(
 		`SELECT media_type, url, media_key, COALESCE(filename, '')
-		 FROM messages WHERE id = ? AND chat_jid = ?`,
+		 FROM messages_unique WHERE id = ? AND chat_jid = ?`,
 		req.MessageID, req.ChatJID,
 	)
 	if err := row.Scan(&mediaType, &url, &mediaKey, &filename); err != nil {

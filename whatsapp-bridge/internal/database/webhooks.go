@@ -6,33 +6,50 @@ import (
 	"whatsapp-bridge/internal/types"
 )
 
-// StoreWebhookConfig stores a webhook configuration in the database
-func (store *MessageStore) StoreWebhookConfig(config *types.WebhookConfig) error {
-	result, err := store.db.Exec(
-		`INSERT INTO webhook_configs (name, webhook_url, secret_token, enabled) 
-		 VALUES (?, ?, ?, ?)`,
-		config.Name, config.WebhookURL, config.SecretToken, config.Enabled,
+// insertWebhookTriggerTx inserts one trigger inside a write task.
+func insertWebhookTriggerTx(tx *sql.Tx, trigger *types.WebhookTrigger) error {
+	result, err := tx.Exec(
+		`INSERT INTO webhook_triggers (webhook_config_id, trigger_type, trigger_value, match_type, enabled) 
+		 VALUES (?, ?, ?, ?, ?)`,
+		trigger.WebhookConfigID, trigger.TriggerType, trigger.TriggerValue, trigger.MatchType, trigger.Enabled,
 	)
 	if err != nil {
 		return err
 	}
-
 	id, err := result.LastInsertId()
 	if err != nil {
 		return err
 	}
-	config.ID = int(id)
+	trigger.ID = int(id)
+	return nil
+}
 
-	// Store triggers
-	for i := range config.Triggers {
-		config.Triggers[i].WebhookConfigID = config.ID
-		err = store.StoreWebhookTrigger(&config.Triggers[i])
+// StoreWebhookConfig stores a webhook configuration and its triggers atomically through the writer queue.
+func (store *MessageStore) StoreWebhookConfig(config *types.WebhookConfig) error {
+	return store.enqueueWrite(func(tx *sql.Tx) error {
+		result, err := tx.Exec(
+			`INSERT INTO webhook_configs (name, webhook_url, secret_token, enabled) 
+			 VALUES (?, ?, ?, ?)`,
+			config.Name, config.WebhookURL, config.SecretToken, config.Enabled,
+		)
 		if err != nil {
 			return err
 		}
-	}
 
-	return nil
+		id, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		config.ID = int(id)
+
+		for i := range config.Triggers {
+			config.Triggers[i].WebhookConfigID = config.ID
+			if err := insertWebhookTriggerTx(tx, &config.Triggers[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, false, true)
 }
 
 // GetWebhookConfig retrieves a webhook configuration by ID
@@ -88,118 +105,71 @@ func (store *MessageStore) GetAllWebhookConfigs() ([]*types.WebhookConfig, error
 	return configs, nil
 }
 
-// UpdateWebhookConfig updates a webhook configuration and its triggers
-// This method properly handles trigger updates by deleting existing triggers
-// and inserting new ones within a transaction to ensure data consistency.
+// UpdateWebhookConfig updates a webhook configuration and its triggers.
+// Existing triggers are replaced inside one write task, so a failure leaves the old ones intact.
 func (store *MessageStore) UpdateWebhookConfig(config *types.WebhookConfig) error {
-	// Start a transaction to ensure consistency
-	tx, err := store.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %v", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	// Update the main webhook configuration
-	result, err := tx.Exec(
-		`UPDATE webhook_configs SET name = ?, webhook_url = ?, secret_token = ?, 
-		 enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-		config.Name, config.WebhookURL, config.SecretToken, config.Enabled, config.ID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update webhook config: %v", err)
-	}
-
-	// Check if the webhook exists
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %v", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("webhook with ID %d not found", config.ID)
-	}
-
-	// Delete existing triggers
-	_, err = tx.Exec("DELETE FROM webhook_triggers WHERE webhook_config_id = ?", config.ID)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing triggers: %v", err)
-	}
-
-	// Insert new triggers
-	for i := range config.Triggers {
-		config.Triggers[i].WebhookConfigID = config.ID
+	return store.enqueueWrite(func(tx *sql.Tx) error {
 		result, err := tx.Exec(
-			`INSERT INTO webhook_triggers (webhook_config_id, trigger_type, trigger_value, match_type, enabled) 
-			 VALUES (?, ?, ?, ?, ?)`,
-			config.Triggers[i].WebhookConfigID, config.Triggers[i].TriggerType,
-			config.Triggers[i].TriggerValue, config.Triggers[i].MatchType, config.Triggers[i].Enabled,
+			`UPDATE webhook_configs SET name = ?, webhook_url = ?, secret_token = ?, 
+			 enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+			config.Name, config.WebhookURL, config.SecretToken, config.Enabled, config.ID,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to insert trigger %d: %v", i, err)
+			return fmt.Errorf("failed to update webhook config: %v", err)
 		}
 
-		id, err := result.LastInsertId()
+		rowsAffected, err := result.RowsAffected()
 		if err != nil {
-			return fmt.Errorf("failed to get last insert ID for trigger %d: %v", i, err)
+			return fmt.Errorf("failed to get rows affected: %v", err)
 		}
-		config.Triggers[i].ID = int(id)
-	}
+		if rowsAffected == 0 {
+			return fmt.Errorf("webhook with ID %d not found", config.ID)
+		}
 
-	// Commit the transaction
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("failed to commit transaction: %v", err)
-	}
+		if _, err := tx.Exec("DELETE FROM webhook_triggers WHERE webhook_config_id = ?", config.ID); err != nil {
+			return fmt.Errorf("failed to delete existing triggers: %v", err)
+		}
 
-	return nil
+		for i := range config.Triggers {
+			config.Triggers[i].WebhookConfigID = config.ID
+			if err := insertWebhookTriggerTx(tx, &config.Triggers[i]); err != nil {
+				return fmt.Errorf("failed to insert trigger %d: %v", i, err)
+			}
+		}
+		return nil
+	}, false, true)
 }
 
 // DeleteWebhookConfig deletes a webhook configuration and its triggers and logs
 func (store *MessageStore) DeleteWebhookConfig(id int) error {
-	// First check if the webhook exists
-	var count int
-	err := store.db.QueryRow("SELECT COUNT(*) FROM webhook_configs WHERE id = ?", id).Scan(&count)
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		return fmt.Errorf("webhook with ID %d not found", id)
-	}
+	return store.enqueueWrite(func(tx *sql.Tx) error {
+		var count int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM webhook_configs WHERE id = ?", id).Scan(&count); err != nil {
+			return err
+		}
+		if count == 0 {
+			return fmt.Errorf("webhook with ID %d not found", id)
+		}
 
-	// Delete webhook logs first (foreign key constraint)
-	_, err = store.db.Exec("DELETE FROM webhook_logs WHERE webhook_config_id = ?", id)
-	if err != nil {
-		return err
-	}
-
-	// Delete triggers second (foreign key constraint)
-	_, err = store.db.Exec("DELETE FROM webhook_triggers WHERE webhook_config_id = ?", id)
-	if err != nil {
-		return err
-	}
-
-	// Delete config last
-	_, err = store.db.Exec("DELETE FROM webhook_configs WHERE id = ?", id)
-	return err
+		// Children first (foreign keys), config last.
+		for _, stmt := range []string{
+			"DELETE FROM webhook_logs WHERE webhook_config_id = ?",
+			"DELETE FROM webhook_triggers WHERE webhook_config_id = ?",
+			"DELETE FROM webhook_configs WHERE id = ?",
+		} {
+			if _, err := tx.Exec(stmt, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, false, true)
 }
 
 // StoreWebhookTrigger stores a webhook trigger
 func (store *MessageStore) StoreWebhookTrigger(trigger *types.WebhookTrigger) error {
-	result, err := store.db.Exec(
-		`INSERT INTO webhook_triggers (webhook_config_id, trigger_type, trigger_value, match_type, enabled) 
-		 VALUES (?, ?, ?, ?, ?)`,
-		trigger.WebhookConfigID, trigger.TriggerType, trigger.TriggerValue, trigger.MatchType, trigger.Enabled,
-	)
-	if err != nil {
-		return err
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return err
-	}
-	trigger.ID = int(id)
-
-	return nil
+	return store.enqueueWrite(func(tx *sql.Tx) error {
+		return insertWebhookTriggerTx(tx, trigger)
+	}, false, true)
 }
 
 // GetWebhookTriggers retrieves all triggers for a webhook config
@@ -229,8 +199,10 @@ func (store *MessageStore) GetWebhookTriggers(webhookConfigID int) ([]types.Webh
 
 // DeleteWebhookTrigger deletes a webhook trigger
 func (store *MessageStore) DeleteWebhookTrigger(id int) error {
-	_, err := store.db.Exec("DELETE FROM webhook_triggers WHERE id = ?", id)
-	return err
+	return store.enqueueWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec("DELETE FROM webhook_triggers WHERE id = ?", id)
+		return err
+	}, false, true)
 }
 
 // StoreWebhookLog stores a webhook delivery log via the writer queue

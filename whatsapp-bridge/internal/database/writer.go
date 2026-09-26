@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -15,26 +16,34 @@ var (
 )
 
 const (
-	maxBatchSize       = 100
-	batchFlushInterval = 25 * time.Millisecond
-	priorityQueueCap   = 2000
-	bulkQueueCap       = 5000
-	writeTimeout       = 10 * time.Second
+	maxBatchSize     = 200
+	priorityQueueCap = 2000
+	bulkQueueCap     = 5000
+	writeTimeout     = 30 * time.Second
 )
 
 type writeTask struct {
 	execute func(tx *sql.Tx) error
-	done    chan error
+	done    chan error // nil for fire-and-forget tasks
 }
 
+// writerQueue serializes every write to messages.db through one goroutine.
+//
+// Producers submit closures; the worker gathers whatever is queued (real-time writes first)
+// and commits them as one transaction, so a burst of messages costs one fsync instead of one
+// per message. Each task runs under its own savepoint: a task that fails is rolled back and
+// reported to its caller without discarding the rest of the batch.
 type writerQueue struct {
 	priorityQueue chan writeTask
 	bulkQueue     chan writeTask
 	closeCh       chan struct{}
 	wg            sync.WaitGroup
 	initOnce      sync.Once
-	closed        bool
-	mu            sync.RWMutex
+
+	mu       sync.RWMutex // guards closed; held while a producer is sending
+	closed   bool
+	errMu    sync.RWMutex
+	onFailed func(error)
 }
 
 // ensureWriter initializes the writer queue and worker goroutine if not already running.
@@ -53,52 +62,67 @@ func (store *MessageStore) ensureWriter() {
 	})
 }
 
-// enqueueWrite routes a write task through the single-writer worker.
-// When wait is true, it blocks until the task is committed (or fails) within writeTimeout.
+// SetWriteErrorHandler registers a callback for failures of writes nobody waits for
+// (history sync). Without one, those failures are printed.
+func (store *MessageStore) SetWriteErrorHandler(fn func(error)) {
+	store.ensureWriter()
+	store.writer.errMu.Lock()
+	store.writer.onFailed = fn
+	store.writer.errMu.Unlock()
+}
+
+func (wq *writerQueue) reportFailure(err error) {
+	wq.errMu.RLock()
+	fn := wq.onFailed
+	wq.errMu.RUnlock()
+	if fn != nil {
+		fn(err)
+		return
+	}
+	fmt.Printf("Warning: queued database write failed: %v\n", err)
+}
+
+// enqueueWrite routes a write through the single-writer worker.
+// When wait is true it blocks until the task is committed (or fails). Bulk tasks go to the
+// low-priority queue: the worker only takes from it when no real-time write is waiting.
 func (store *MessageStore) enqueueWrite(execute func(tx *sql.Tx) error, isBulk bool, wait bool) error {
 	store.ensureWriter()
-
-	store.writer.mu.RLock()
-	if store.writer.closed {
-		store.writer.mu.RUnlock()
-		return ErrStoreClosed
-	}
-	store.writer.mu.RUnlock()
+	wq := store.writer
 
 	var done chan error
 	if wait {
 		done = make(chan error, 1)
 	}
+	task := writeTask{execute: execute, done: done}
 
-	task := writeTask{
-		execute: execute,
-		done:    done,
+	target := wq.priorityQueue
+	if isBulk {
+		target = wq.bulkQueue
 	}
 
-	targetQueue := store.writer.priorityQueue
-	if isBulk {
-		targetQueue = store.writer.bulkQueue
+	// The read lock is held while sending so close() cannot finish (and stop the worker)
+	// between the closed check and the send: a task accepted here is always executed.
+	wq.mu.RLock()
+	if wq.closed {
+		wq.mu.RUnlock()
+		return ErrStoreClosed
+	}
+	target <- task
+	wq.mu.RUnlock()
+
+	if !wait {
+		return nil
 	}
 
 	select {
-	case targetQueue <- task:
-	case <-store.writer.closeCh:
-		return ErrStoreClosed
+	case err := <-done:
+		return err
+	case <-time.After(writeTimeout):
+		return ErrWriteTimeout
 	}
-
-	if wait {
-		select {
-		case err := <-done:
-			return err
-		case <-time.After(writeTimeout):
-			return ErrWriteTimeout
-		}
-	}
-
-	return nil
 }
 
-// close flushes pending tasks and terminates the writer worker.
+// close stops accepting writes, flushes what is queued and terminates the worker.
 func (wq *writerQueue) close() {
 	wq.mu.Lock()
 	if wq.closed {
@@ -106,20 +130,38 @@ func (wq *writerQueue) close() {
 		return
 	}
 	wq.closed = true
-	close(wq.closeCh)
+	if wq.closeCh != nil {
+		close(wq.closeCh)
+	}
 	wq.mu.Unlock()
 
 	wq.wg.Wait()
 }
 
-// startWriterWorker runs the single dedicated writer loop, draining queues and committing transactions in batches.
+// startWriterWorker runs the single dedicated writer loop.
 func (store *MessageStore) startWriterWorker() {
-	defer store.writer.wg.Done()
+	wq := store.writer
+	defer wq.wg.Done()
 
-	ticker := time.NewTicker(batchFlushInterval)
-	defer ticker.Stop()
+	batch := make([]writeTask, 0, maxBatchSize)
 
-	var batch []writeTask
+	// fill appends queued tasks without blocking: real-time first, then bulk.
+	fill := func() {
+		for len(batch) < maxBatchSize {
+			select {
+			case t := <-wq.priorityQueue:
+				batch = append(batch, t)
+				continue
+			default:
+			}
+			select {
+			case t := <-wq.bulkQueue:
+				batch = append(batch, t)
+			default:
+				return
+			}
+		}
+	}
 
 	flush := func() {
 		if len(batch) == 0 {
@@ -131,138 +173,71 @@ func (store *MessageStore) startWriterWorker() {
 
 	for {
 		select {
-		case <-store.writer.closeCh:
-			// Drain all remaining tasks before terminating
+		case <-wq.closeCh:
+			// close() holds the lock while setting closed, so no producer is mid-send: what is
+			// in the queues now is everything that will ever arrive.
 			for {
-				select {
-				case task := <-store.writer.priorityQueue:
-					batch = append(batch, task)
-					if len(batch) >= maxBatchSize {
-						flush()
-					}
-				case task := <-store.writer.bulkQueue:
-					batch = append(batch, task)
-					if len(batch) >= maxBatchSize {
-						flush()
-					}
-				default:
-					flush()
+				fill()
+				if len(batch) == 0 {
 					return
 				}
-			}
-
-		case task := <-store.writer.priorityQueue:
-			batch = append(batch, task)
-		drainPriority:
-			for len(batch) < maxBatchSize {
-				select {
-				case t := <-store.writer.priorityQueue:
-					batch = append(batch, t)
-				default:
-					break drainPriority
-				}
-			}
-			if len(batch) >= maxBatchSize {
 				flush()
 			}
 
-		case task := <-store.writer.bulkQueue:
-			batch = append(batch, task)
-		drainBulk:
-			for len(batch) < maxBatchSize {
-				// Priority queue always takes precedence
-				select {
-				case p := <-store.writer.priorityQueue:
-					batch = append(batch, p)
-					continue
-				default:
-				}
+		case t := <-wq.priorityQueue:
+			batch = append(batch, t)
+			fill()
+			flush()
 
-				select {
-				case b := <-store.writer.bulkQueue:
-					batch = append(batch, b)
-				default:
-					break drainBulk
-				}
-			}
-			if len(batch) >= maxBatchSize {
-				flush()
-			}
-
-		case <-ticker.C:
+		case t := <-wq.bulkQueue:
+			batch = append(batch, t)
+			fill()
 			flush()
 		}
 	}
 }
 
-// executeBatch executes an accumulated slice of write tasks within a transaction.
-// If any task fails during the batch, it rolls back and executes tasks individually to isolate poison pills.
+// executeBatch runs the tasks in one transaction, each under its own savepoint.
 func (store *MessageStore) executeBatch(batch []writeTask) {
-	if len(batch) == 0 {
+	if store.db == nil {
+		store.finish(batch, func(int) error { return fmt.Errorf("database not initialized") })
 		return
 	}
-
 	tx, err := store.db.Begin()
 	if err != nil {
-		for _, task := range batch {
-			if task.done != nil {
-				task.done <- err
-			}
-		}
+		store.finish(batch, func(int) error { return err })
 		return
 	}
 
-	var anyErr bool
-	for _, task := range batch {
-		if taskErr := task.execute(tx); taskErr != nil {
-			anyErr = true
-			break
+	results := make([]error, len(batch))
+	for i, task := range batch {
+		if _, err := tx.Exec("SAVEPOINT task"); err != nil {
+			results[i] = err
+			continue
 		}
+		if execErr := task.execute(tx); execErr != nil {
+			results[i] = execErr
+			_, _ = tx.Exec("ROLLBACK TO SAVEPOINT task")
+		}
+		_, _ = tx.Exec("RELEASE SAVEPOINT task")
 	}
 
-	if anyErr {
-		// Roll back batch transaction and fall back to sequential execution per task
-		_ = tx.Rollback()
-
-		for _, task := range batch {
-			individualTx, err := store.db.Begin()
-			if err != nil {
-				if task.done != nil {
-					task.done <- err
-				}
-				continue
-			}
-
-			execErr := task.execute(individualTx)
-			if execErr != nil {
-				_ = individualTx.Rollback()
-				if task.done != nil {
-					task.done <- execErr
-				}
-			} else {
-				commitErr := individualTx.Commit()
-				if task.done != nil {
-					task.done <- commitErr
-				}
-			}
-		}
-		return
-	}
-
-	// Normal path: commit the whole batch in one fsync
 	if commitErr := tx.Commit(); commitErr != nil {
-		for _, task := range batch {
-			if task.done != nil {
-				task.done <- commitErr
-			}
-		}
+		_ = tx.Rollback()
+		store.finish(batch, func(int) error { return commitErr })
 		return
 	}
+	store.finish(batch, func(i int) error { return results[i] })
+}
 
-	// Notify all tasks of successful commit
-	for _, task := range batch {
+// finish reports each task's outcome to its waiter, or to the error handler when nobody waits.
+func (store *MessageStore) finish(batch []writeTask, result func(i int) error) {
+	for i, task := range batch {
+		err := result(i)
 		if task.done != nil {
-			task.done <- nil
+			task.done <- err
+		} else if err != nil {
+			store.writer.reportFailure(err)
 		}
 	}
 }

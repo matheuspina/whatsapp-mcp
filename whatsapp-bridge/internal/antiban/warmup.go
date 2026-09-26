@@ -118,7 +118,8 @@ func (w *WarmUp) saveState() error {
 		return nil
 	}
 	if w.cfg.WarmUpStatePath == "" {
-		return errors.New("warm-up state path is empty")
+		// In-memory only (a number that is still pairing has nothing to persist yet).
+		return nil
 	}
 
 	w.mu.Lock()

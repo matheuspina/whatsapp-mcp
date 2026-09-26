@@ -9,11 +9,27 @@ import (
 	"whatsapp-bridge/internal/types"
 )
 
-// StoreChatWithInstance stores a chat with instance association via the writer queue
+// StoreChatWithInstance stores a chat and records that the instance takes part in it.
+// The write goes through the writer queue and returns once it is committed.
 func (store *MessageStore) StoreChatWithInstance(jid, name string, lastMessageTime time.Time, instanceJID string) error {
-	return store.enqueueWrite(func(tx *sql.Tx) error {
+	return store.enqueueWrite(chatWrite(jid, name, lastMessageTime, instanceJID), false, true)
+}
+
+// StoreChatBulk is StoreChatWithInstance for history sync: it goes through the bulk queue and
+// returns as soon as the write is queued. Failures are reported to the error handler.
+func (store *MessageStore) StoreChatBulk(jid, name string, lastMessageTime time.Time, instanceJID string) error {
+	return store.enqueueWrite(chatWrite(jid, name, lastMessageTime, instanceJID), true, false)
+}
+
+// StoreChat stores a chat that is not tied to an instance.
+func (store *MessageStore) StoreChat(jid, name string, lastMessageTime time.Time) error {
+	return store.StoreChatWithInstance(jid, name, lastMessageTime, "")
+}
+
+func chatWrite(jid, name string, lastMessageTime time.Time, instanceJID string) func(tx *sql.Tx) error {
+	return func(tx *sql.Tx) error {
 		_, err := tx.Exec(
-			`INSERT INTO chats (jid, name, last_message_time, instance_jid) VALUES (?, ?, ?, ?)
+			`INSERT INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)
 			ON CONFLICT(jid) DO UPDATE SET
 				name = CASE
 					WHEN excluded.name != '' THEN excluded.name
@@ -22,44 +38,49 @@ func (store *MessageStore) StoreChatWithInstance(jid, name string, lastMessageTi
 				last_message_time = CASE
 					WHEN chats.last_message_time IS NULL OR excluded.last_message_time > chats.last_message_time THEN excluded.last_message_time
 					ELSE chats.last_message_time
-				END,
-				instance_jid = CASE
-					WHEN excluded.instance_jid != '' THEN excluded.instance_jid
-					ELSE chats.instance_jid
 				END`,
-			jid, name, lastMessageTime, instanceJID,
+			jid, name, lastMessageTime,
+		)
+		if err != nil || instanceJID == "" {
+			return err
+		}
+		_, err = tx.Exec(
+			`INSERT INTO chat_instances (instance_jid, chat_jid, last_message_time) VALUES (?, ?, ?)
+			ON CONFLICT(instance_jid, chat_jid) DO UPDATE SET
+				last_message_time = CASE
+					WHEN chat_instances.last_message_time IS NULL OR excluded.last_message_time > chat_instances.last_message_time THEN excluded.last_message_time
+					ELSE chat_instances.last_message_time
+				END`,
+			instanceJID, jid, lastMessageTime,
 		)
 		return err
-	}, false, true)
+	}
 }
 
-// StoreChat stores a chat in the database via the writer queue
-func (store *MessageStore) StoreChat(jid, name string, lastMessageTime time.Time) error {
-	return store.StoreChatWithInstance(jid, name, lastMessageTime, "")
-}
-
-// StoreMessageWithInstance stores a message with its instance association
+// StoreMessageWithInstance stores a message attributed to the instance that captured it.
+// isBulk routes it through the low-priority queue used by history sync, which does not wait
+// for the commit (failures reach the error handler instead).
 func (store *MessageStore) StoreMessageWithInstance(id, chatJID, sender, senderName, content string, timestamp time.Time, isFromMe bool,
 	mediaType, filename, url, directPath string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64, instanceJID string, isBulk bool) error {
-	return store.storeMessageWithPriority(id, chatJID, sender, senderName, content, timestamp, isFromMe,
+	return store.storeMessage(id, chatJID, sender, senderName, content, timestamp, isFromMe,
 		mediaType, filename, url, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength, instanceJID, isBulk)
 }
 
-// StoreMessage stores a message in the database via the writer queue
+// StoreMessage stores a message that is not attributed to an instance.
 func (store *MessageStore) StoreMessage(id, chatJID, sender, senderName, content string, timestamp time.Time, isFromMe bool,
 	mediaType, filename, url, directPath string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64) error {
-	return store.storeMessageWithPriority(id, chatJID, sender, senderName, content, timestamp, isFromMe,
+	return store.storeMessage(id, chatJID, sender, senderName, content, timestamp, isFromMe,
 		mediaType, filename, url, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength, "", false)
 }
 
-// StoreMessageBulk stores a message in the database via the bulk writer queue (for history sync)
+// StoreMessageBulk stores an unattributed message through the bulk queue.
 func (store *MessageStore) StoreMessageBulk(id, chatJID, sender, senderName, content string, timestamp time.Time, isFromMe bool,
 	mediaType, filename, url, directPath string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64) error {
-	return store.storeMessageWithPriority(id, chatJID, sender, senderName, content, timestamp, isFromMe,
+	return store.storeMessage(id, chatJID, sender, senderName, content, timestamp, isFromMe,
 		mediaType, filename, url, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength, "", true)
 }
 
-func (store *MessageStore) storeMessageWithPriority(id, chatJID, sender, senderName, content string, timestamp time.Time, isFromMe bool,
+func (store *MessageStore) storeMessage(id, chatJID, sender, senderName, content string, timestamp time.Time, isFromMe bool,
 	mediaType, filename, url, directPath string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64, instanceJID string, isBulk bool) error {
 	// Only store if there's actual content or media
 	if content == "" && mediaType == "" {
@@ -72,14 +93,38 @@ func (store *MessageStore) storeMessageWithPriority(id, chatJID, sender, senderN
 	}
 
 	return store.enqueueWrite(func(tx *sql.Tx) error {
+		// An upsert instead of INSERT OR REPLACE: the row keeps its audit state (deleted, edited
+		// flags) when history sync delivers the same message again, and only moves to a new
+		// rowid, which is what makes the search indexer re-read it, when its text changed.
 		_, err := tx.Exec(
-			`INSERT OR REPLACE INTO messages
+			`INSERT INTO messages
 			(id, chat_jid, sender, sender_name, content, timestamp, is_from_me, media_type, filename, url, direct_path, media_key, file_sha256, file_enc_sha256, file_length, instance_jid)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(instance_jid, chat_jid, id) DO UPDATE SET
+				sender = excluded.sender,
+				sender_name = CASE
+					WHEN excluded.sender_name = excluded.sender AND COALESCE(messages.sender_name, '') != '' THEN messages.sender_name
+					ELSE excluded.sender_name
+				END,
+				content = CASE WHEN messages.is_edited = 1 THEN messages.content ELSE excluded.content END,
+				timestamp = excluded.timestamp,
+				is_from_me = excluded.is_from_me,
+				media_type = excluded.media_type,
+				filename = excluded.filename,
+				url = excluded.url,
+				direct_path = excluded.direct_path,
+				media_key = excluded.media_key,
+				file_sha256 = excluded.file_sha256,
+				file_enc_sha256 = excluded.file_enc_sha256,
+				file_length = excluded.file_length,
+				rowid = CASE
+					WHEN messages.is_edited = 0 AND messages.content IS NOT excluded.content THEN (SELECT MAX(rowid) + 1 FROM messages)
+					ELSE messages.rowid
+				END`,
 			id, chatJID, sender, senderName, content, timestamp, isFromMe, mediaType, filename, url, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength, instanceJID,
 		)
 		return err
-	}, isBulk, true)
+	}, isBulk, !isBulk)
 }
 
 // GetMessageMedia retrieves media metadata for a single message.
@@ -87,7 +132,7 @@ func (store *MessageStore) GetMessageMedia(id, chatJID string) (mediaType, filen
 	row := store.db.QueryRow(
 		`SELECT COALESCE(media_type,''), COALESCE(filename,''), COALESCE(url,''), COALESCE(direct_path,''),
 		        media_key, file_sha256, file_enc_sha256, COALESCE(file_length,0)
-		   FROM messages WHERE id = ? AND chat_jid = ?`,
+		   FROM messages_unique WHERE id = ? AND chat_jid = ?`,
 		id, chatJID,
 	)
 	err = row.Scan(&mediaType, &filename, &url, &directPath, &mediaKey, &fileSHA256, &fileEncSHA256, &fileLength)
@@ -97,7 +142,9 @@ func (store *MessageStore) GetMessageMedia(id, chatJID string) (mediaType, filen
 // GetMessages gets messages from a chat
 func (store *MessageStore) GetMessages(chatJID string, limit int) ([]types.Message, error) {
 	rows, err := store.db.Query(
-		"SELECT id, sender, sender_name, content, timestamp, is_from_me, media_type, filename FROM messages WHERE chat_jid = ? ORDER BY timestamp DESC LIMIT ?",
+		`SELECT id, sender, sender_name, content, timestamp, is_from_me, media_type, filename,
+		        COALESCE(instance_jid, ''), COALESCE(is_deleted_remote, 0), deleted_at, COALESCE(deleted_by, ''), COALESCE(is_edited, 0)
+		   FROM messages_unique WHERE chat_jid = ? ORDER BY timestamp DESC LIMIT ?`,
 		chatJID, limit,
 	)
 	if err != nil {
@@ -110,7 +157,8 @@ func (store *MessageStore) GetMessages(chatJID string, limit int) ([]types.Messa
 		var msg types.Message
 		var timestamp time.Time
 		var senderName sql.NullString
-		err := rows.Scan(&msg.ID, &msg.Sender, &senderName, &msg.Content, &timestamp, &msg.IsFromMe, &msg.MediaType, &msg.Filename)
+		err := rows.Scan(&msg.ID, &msg.Sender, &senderName, &msg.Content, &timestamp, &msg.IsFromMe, &msg.MediaType, &msg.Filename,
+			&msg.InstanceJID, &msg.IsDeletedRemote, &msg.DeletedAt, &msg.DeletedBy, &msg.IsEdited)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +177,7 @@ func (store *MessageStore) GetMessages(chatJID string, limit int) ([]types.Messa
 // GetMessageCount returns total message count.
 func (store *MessageStore) GetMessageCount() (int, error) {
 	var count int
-	err := store.db.QueryRow("SELECT COUNT(*) FROM messages").Scan(&count)
+	err := store.db.QueryRow("SELECT COUNT(*) FROM messages_unique").Scan(&count)
 	return count, err
 }
 
@@ -216,7 +264,7 @@ func ExtractMentions(content string) []string {
 // Period is specified in days (e.g., 1 for today, 7 for last 7 days).
 func (store *MessageStore) GetMessageCountForPeriod(chatJID string, days int) (int, error) {
 	query := `
-	SELECT COUNT(*) FROM messages
+	SELECT COUNT(*) FROM messages_unique
 	WHERE chat_jid = ? AND datetime(timestamp) >= datetime('now', '-' || ? || ' days')
 	`
 	var count int
@@ -280,7 +328,7 @@ func (store *MessageStore) GetGroupAdmins(groupJID string) ([]string, error) {
 func (store *MessageStore) GetMostActiveGroupMember(groupJID string) (string, int, error) {
 	query := `
 	SELECT sender_name, COUNT(*) as count
-	FROM messages
+	FROM messages_unique
 	WHERE chat_jid = ? AND sender_name != ''
 	GROUP BY sender
 	ORDER BY count DESC
@@ -299,7 +347,7 @@ func (store *MessageStore) GetMostActiveGroupMember(groupJID string) (string, in
 func (store *MessageStore) GetMediaCountByType(chatJID string) (map[string]int, error) {
 	query := `
 	SELECT media_type, COUNT(*) as count
-	FROM messages
+	FROM messages_unique
 	WHERE chat_jid = ? AND media_type != '' AND media_type IS NOT NULL
 	GROUP BY media_type
 	`
@@ -325,7 +373,7 @@ func (store *MessageStore) GetMediaCountByType(chatJID string) (map[string]int, 
 func (store *MessageStore) GetRecentMedia(chatJID string, limit int) ([]string, error) {
 	query := `
 	SELECT filename
-	FROM messages
+	FROM messages_unique
 	WHERE chat_jid = ? AND media_type != '' AND media_type IS NOT NULL AND filename != '' AND filename IS NOT NULL
 	ORDER BY timestamp DESC
 	LIMIT ?
@@ -351,7 +399,7 @@ func (store *MessageStore) GetRecentMedia(chatJID string, limit int) ([]string, 
 // Used by SendReaction to build the correct message key.
 func (store *MessageStore) GetMessageSender(messageID, chatJID string) (sender string, isFromMe bool, err error) {
 	err = store.db.QueryRow(
-		"SELECT sender, is_from_me FROM messages WHERE id = ? AND chat_jid = ?",
+		"SELECT sender, is_from_me FROM messages_unique WHERE id = ? AND chat_jid = ?",
 		messageID, chatJID,
 	).Scan(&sender, &isFromMe)
 	return
@@ -360,7 +408,7 @@ func (store *MessageStore) GetMessageSender(messageID, chatJID string) (sender s
 // GetMessageContentAndSender returns content, sender JID, and is_from_me for a message ID.
 func (store *MessageStore) GetMessageContentAndSender(messageID string) (content string, sender string, isFromMe bool, err error) {
 	err = store.db.QueryRow(
-		"SELECT content, sender, is_from_me FROM messages WHERE id = ? ORDER BY timestamp DESC LIMIT 1",
+		"SELECT content, sender, is_from_me FROM messages_unique WHERE id = ? ORDER BY timestamp DESC LIMIT 1",
 		messageID,
 	).Scan(&content, &sender, &isFromMe)
 	return
@@ -370,7 +418,7 @@ func (store *MessageStore) GetMessageContentAndSender(messageID string) (content
 func (store *MessageStore) GetPreviousMessageTime(chatJID string, currentTime time.Time) (time.Time, error) {
 	query := `
 	SELECT timestamp
-	FROM messages
+	FROM messages_unique
 	WHERE chat_jid = ? AND timestamp < ?
 	ORDER BY timestamp DESC
 	LIMIT 1
@@ -381,4 +429,22 @@ func (store *MessageStore) GetPreviousMessageTime(chatJID string, currentTime ti
 		return time.Time{}, nil
 	}
 	return prevTime, err
+}
+
+// GetNewestMessageForInstance returns the newest message a number holds in a chat: the anchor for
+// a history request, which WhatsApp only honours for messages that account knows.
+func (store *MessageStore) GetNewestMessageForInstance(instanceJID, chatJID string) (*types.Message, error) {
+	var msg types.Message
+	err := store.db.QueryRow(
+		`SELECT id, COALESCE(sender, ''), timestamp, COALESCE(is_from_me, 0) FROM messages
+		 WHERE instance_jid = ? AND chat_jid = ? ORDER BY timestamp DESC LIMIT 1`,
+		instanceJID, chatJID,
+	).Scan(&msg.ID, &msg.Sender, &msg.Time, &msg.IsFromMe)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &msg, nil
 }

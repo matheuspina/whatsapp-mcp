@@ -39,6 +39,18 @@ type Config struct {
 	WebUIUsername   string        // WEB_UI_USERNAME
 	WebUIPassword   string        // WEB_UI_PASSWORD
 	WebUISessionTTL time.Duration // WEB_UI_SESSION_TTL (default 24h, sliding expiry)
+
+	// Governance
+	// RETENTION_DAYS deletes captured messages older than this many days (0 disables).
+	RetentionDays int
+	// REQUIRE_CORPORATE_CONFIRMATION=true stops capturing messages from numbers whose
+	// corporate-asset attestation has not been recorded.
+	RequireCorporateConfirmation bool
+	// INSTANCE_ALLOW_SEND_DEFAULT (default true) is the send permission given to numbers that are
+	// registered without an explicit choice (the first device, or devices loaded at startup).
+	InstanceAllowSendDefault bool
+	// MAX_PENDING_PAIRINGS limits QR pairings in progress at the same time (default 5).
+	MaxPendingPairings int
 }
 
 // IsPlaceholder reports whether a secret still holds the example value shipped in
@@ -66,6 +78,24 @@ func NewConfig() *Config {
 		PresenceLingerMax: 15 * time.Second,
 		// Web UI session default
 		WebUISessionTTL: 24 * time.Hour,
+		// Governance defaults
+		InstanceAllowSendDefault: true,
+		MaxPendingPairings:       5,
+	}
+
+	if v := os.Getenv("RETENTION_DAYS"); v != "" {
+		if d, err := strconv.Atoi(v); err == nil && d >= 0 {
+			cfg.RetentionDays = d
+		}
+	}
+	cfg.RequireCorporateConfirmation = os.Getenv("REQUIRE_CORPORATE_CONFIRMATION") == "true"
+	if os.Getenv("INSTANCE_ALLOW_SEND_DEFAULT") == "false" {
+		cfg.InstanceAllowSendDefault = false
+	}
+	if v := os.Getenv("MAX_PENDING_PAIRINGS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.MaxPendingPairings = n
+		}
 	}
 
 	cfg.WebUIUsername = os.Getenv("WEB_UI_USERNAME")
