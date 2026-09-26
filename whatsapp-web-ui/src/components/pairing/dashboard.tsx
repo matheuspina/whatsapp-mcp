@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Notice, noticeToneVariants } from "@/components/common/notice";
+import { StatCard } from "@/components/common/stat-card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle, RefreshCw, Settings, Plus, MessageSquare, Clock, AlertTriangle, Loader2, XCircle, WifiOff, Zap } from "lucide-react";
 import { WhatsAppAPI, SyncStatusResponse, ConnectionStatusResponse } from "@/lib/api";
 import { usePairing } from "@/lib/store";
-import { cn } from "@/lib/utils";
 
 interface DashboardProps {
   onOpenSettings: () => void;
@@ -73,17 +74,17 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
         <CardTitle className="flex items-center justify-center gap-2">
           {isConnected ? (
             <>
-              <CheckCircle className="h-6 w-6 text-green-500" />
+              <CheckCircle className="h-6 w-6 text-success" />
               Connected
             </>
           ) : hasReconnectErrors ? (
             <>
-              <Loader2 className="h-6 w-6 text-yellow-500 animate-spin" />
+              <Loader2 className="h-6 w-6 text-warning animate-spin" />
               Reconnecting...
             </>
           ) : (
             <>
-              <XCircle className="h-6 w-6 text-red-500" />
+              <XCircle className="h-6 w-6 text-destructive" />
               Disconnected
             </>
           )}
@@ -93,28 +94,19 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
       <CardContent className="space-y-6">
         {/* Connection details when disconnected */}
         {isDisconnected && (
-          <Card className={cn(
-            "border-red-500/50 bg-red-500/10",
-            hasReconnectErrors && "border-yellow-500/50 bg-yellow-500/10"
-          )}>
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <WifiOff className={cn("h-4 w-4", hasReconnectErrors ? "text-yellow-500" : "text-red-500")} />
-                <span className="text-sm font-medium">Connection Lost</span>
-              </div>
-              <div className="text-sm text-muted-foreground space-y-1">
-                {connStatus?.disconnected_for && (
-                  <p>Disconnected for: <span className="font-mono font-medium text-foreground">{connStatus.disconnected_for}</span></p>
-                )}
-                {connStatus?.last_connected && (
-                  <p>Last connected: <span className="font-mono text-foreground">{new Date(connStatus.last_connected).toLocaleString()}</span></p>
-                )}
-                {hasReconnectErrors && (
-                  <p>Reconnect attempts: <span className="font-mono text-foreground">{connStatus?.auto_reconnect_errors}</span></p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <Notice variant={hasReconnectErrors ? "warning" : "destructive"} icon={WifiOff} title="Connection Lost">
+            <div className="text-sm text-muted-foreground space-y-1">
+              {connStatus?.disconnected_for && (
+                <p>Disconnected for: <span className="font-mono font-medium text-foreground">{connStatus.disconnected_for}</span></p>
+              )}
+              {connStatus?.last_connected && (
+                <p>Last connected: <span className="font-mono text-foreground">{new Date(connStatus.last_connected).toLocaleString()}</span></p>
+              )}
+              {hasReconnectErrors && (
+                <p>Reconnect attempts: <span className="font-mono text-foreground">{connStatus?.auto_reconnect_errors}</span></p>
+              )}
+            </div>
+          </Notice>
         )}
 
         {/* Uptime when connected */}
@@ -128,95 +120,51 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
         )}
 
         <div className="grid grid-cols-2 gap-4">
-          <Card className="bg-muted/50">
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                {syncStatus?.syncing ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
-                ) : (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                )}
-                <span className="text-sm font-medium">Sync Status</span>
-              </div>
-              <div className="text-2xl font-semibold">
-                {syncStatus?.syncing ? "Syncing" : "Synced"}
-              </div>
-              {syncStatus && (
-                <Progress value={syncStatus.sync_progress} className="mt-2 h-2" />
-              )}
-            </CardContent>
-          </Card>
+          <StatCard
+            icon={syncStatus?.syncing ? <Loader2 className="animate-spin text-warning" /> : <CheckCircle className="text-success" />}
+            label="Sync Status"
+            value={syncStatus?.syncing ? "Syncing" : "Synced"}
+          >
+            {syncStatus && <Progress value={syncStatus.sync_progress} className="mt-2 h-2" />}
+          </StatCard>
 
-          <Card className="bg-muted/50">
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Last Sync</span>
-              </div>
-              <div className="text-sm font-medium">
-                {syncStatus?.last_sync
-                  ? new Date(syncStatus.last_sync).toLocaleString()
-                  : "In progress..."}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+          <StatCard
+            icon={<Clock className="text-muted-foreground" />}
+            label="Last Sync"
+            large={false}
+            value={syncStatus?.last_sync ? new Date(syncStatus.last_sync).toLocaleString() : "In progress..."}
+          />
 
-        <div className="grid grid-cols-2 gap-4">
-          <Card className="bg-muted/50">
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Messages</span>
-              </div>
-              <div className="text-2xl font-semibold">
-                {syncStatus?.message_count?.toLocaleString() || "0"}
-              </div>
-            </CardContent>
-          </Card>
+          <StatCard
+            icon={<MessageSquare className="text-muted-foreground" />}
+            label="Messages"
+            value={syncStatus?.message_count?.toLocaleString() || "0"}
+          />
 
-          <Card className="bg-muted/50">
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Chats</span>
-              </div>
-              <div className="text-2xl font-semibold">
-                {syncStatus?.conversation_count?.toLocaleString() || "0"}
-              </div>
-            </CardContent>
-          </Card>
+          <StatCard
+            icon={<MessageSquare className="text-muted-foreground" />}
+            label="Chats"
+            value={syncStatus?.conversation_count?.toLocaleString() || "0"}
+          />
         </div>
 
         {syncStatus?.recommendations && syncStatus.recommendations.length > 0 && (
-          <Card className="border-yellow-500/50 bg-yellow-500/10">
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-medium">Recommendations</span>
-              </div>
-              <ul className="text-sm text-muted-foreground space-y-1">
-                {syncStatus.recommendations.map((rec, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="text-yellow-500">•</span>
-                    {rec}
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          <Notice variant="warning" icon={AlertTriangle} title="Recommendations">
+            <ul className="text-sm text-muted-foreground space-y-1">
+              {syncStatus.recommendations.map((rec, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className={noticeToneVariants({ variant: "warning" })}>•</span>
+                  {rec}
+                </li>
+              ))}
+            </ul>
+          </Notice>
         )}
 
         {syncStatus?.error && (
-          <Card className="border-destructive/50 bg-destructive/10">
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                <span className="text-sm font-medium">Error</span>
-              </div>
-              <p className="text-sm text-muted-foreground">{syncStatus.error}</p>
-            </CardContent>
-          </Card>
+          <Notice variant="destructive" icon={AlertTriangle} title="Error">
+            <p className="text-sm text-muted-foreground">{syncStatus.error}</p>
+          </Notice>
         )}
 
         <Separator />

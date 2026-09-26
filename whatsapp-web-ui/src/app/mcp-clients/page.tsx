@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PageContainer, PageHeader } from "@/components/layout/page";
 import { ClientCard } from "@/components/mcp/client-card";
 import { CodeBlock } from "@/components/mcp/code-block";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,12 +23,8 @@ export default function McpPage() {
   const localUrl = url ? isLocalUrl(url) : true;
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">MCP</h1>
-          <p className="text-sm text-muted-foreground">Connect an AI client to your WhatsApp account</p>
-        </div>
+    <PageContainer>
+        <PageHeader title="MCP" description="Connect an AI client to your WhatsApp account" />
 
         <Card>
           <CardHeader>
@@ -64,7 +61,6 @@ export default function McpPage() {
             ))}
           </div>
         )}
-      </div>
-    </div>
+    </PageContainer>
   );
 }

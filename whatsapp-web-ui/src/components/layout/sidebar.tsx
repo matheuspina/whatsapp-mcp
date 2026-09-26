@@ -107,9 +107,9 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
   };
 
   const dotColor = {
-    connected: "bg-green-500",
-    disconnected: "bg-red-500",
-    unknown: "bg-yellow-500",
+    connected: "bg-success",
+    disconnected: "bg-destructive",
+    unknown: "bg-warning",
   }[connStatus];
 
   const statusLabel = {
@@ -125,7 +125,7 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip="WhatsApp MCP">
               <Link href="/">
-                <div className="relative flex aspect-square size-8 items-center justify-center rounded-lg bg-green-500/10 text-green-600 dark:text-green-500">
+                <div className="relative flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                   <MessageSquare className="size-5" />
                   <span
                     className={cn(

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { PageContainer } from "@/components/layout/page";
 import { WebhookList } from "@/components/webhooks";
 import { useSettings } from "@/lib/store";
 
@@ -16,10 +17,8 @@ export default function WebhooksPage() {
   }, [darkMode]);
 
   return (
-    <div className="p-4 md:p-6">
-      <div>
-        <WebhookList />
-      </div>
-    </div>
+    <PageContainer>
+      <WebhookList />
+    </PageContainer>
   );
 }

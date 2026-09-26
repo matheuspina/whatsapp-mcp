@@ -90,8 +90,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
-          <MessageSquare className="mx-auto mb-2 h-10 w-10 text-green-500" />
-          <CardTitle className="text-xl">WhatsApp MCP</CardTitle>
+          <MessageSquare className="mx-auto mb-2 h-10 w-10 text-success" />
+          <CardTitle>WhatsApp MCP</CardTitle>
           <CardDescription>by Matheus Pina</CardDescription>
         </CardHeader>
         <CardContent>
@@ -123,7 +123,7 @@ export default function LoginPage() {
                 {error}
               </p>
             )}
-            <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
               Sign in
             </Button>

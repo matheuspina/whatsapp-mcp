@@ -21,7 +21,7 @@ interface StatusInfo {
 
 const statusConfigs: Record<PairingStatus, StatusInfo> = {
   waiting: { icon: Loader2, text: "Waiting for phone...", color: "text-muted-foreground", animate: true },
-  success: { icon: CheckCircle, text: "Pairing successful!", color: "text-green-500", animate: false },
+  success: { icon: CheckCircle, text: "Pairing successful!", color: "text-success", animate: false },
   error: { icon: AlertCircle, text: "Pairing failed", color: "text-destructive", animate: false },
   expired: { icon: AlertCircle, text: "Code expired", color: "text-destructive", animate: false },
 };
@@ -94,7 +94,7 @@ export function CodeDisplay() {
       <CardContent className="space-y-6">
         <div className="relative">
           <div
-            className="text-3xl font-mono font-semibold text-center py-8 px-4 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 text-white tracking-widest cursor-pointer hover:opacity-90 transition-opacity"
+            className="text-3xl font-mono font-semibold text-center py-8 px-4 rounded-lg bg-primary text-primary-foreground tracking-widest cursor-pointer hover:opacity-90 transition-opacity"
             onClick={copyCode}
             title="Click to copy"
           >
@@ -103,7 +103,7 @@ export function CodeDisplay() {
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-2 right-2 text-white/70 hover:text-white hover:bg-white/20"
+            className="absolute top-2 right-2 text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/20"
             onClick={copyCode}
           >
             <Copy className="h-4 w-4" />
@@ -124,7 +124,7 @@ export function CodeDisplay() {
 
         <div className="border rounded-lg p-4">
           <div className="flex items-center gap-2 mb-4">
-            <Smartphone className="h-5 w-5 text-green-500" />
+            <Smartphone className="h-5 w-5 text-success" />
             <span className="font-medium">On Your Phone:</span>
           </div>
 

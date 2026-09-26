@@ -32,7 +32,7 @@ export function ClientCard({ client, localUrl }: ClientCardProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {client.cloud && localUrl && (
-          <Badge variant="outline" className="border-yellow-500/50 text-yellow-600 dark:text-yellow-400">
+          <Badge variant="warning">
             Needs a public https URL
           </Badge>
         )}

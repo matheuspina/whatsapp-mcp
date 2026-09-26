@@ -3,6 +3,7 @@
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { ActiveSessions } from "@/components/settings/active-sessions";
+import { PageContainer, PageHeader } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -24,12 +25,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="max-w-3xl space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground">Account, sessions and appearance</p>
-        </div>
+    <PageContainer size="narrow">
+        <PageHeader title="Settings" description="Account, sessions and appearance" />
 
         <Card>
           <CardHeader>
@@ -66,7 +63,6 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </PageContainer>
   );
 }

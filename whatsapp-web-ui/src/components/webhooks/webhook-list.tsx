@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Webhook, WhatsAppAPI, getErrorMessage } from "@/lib/api";
 
+import { PageHeader } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -125,25 +126,23 @@ export function WebhookList() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Webhooks</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage webhook endpoints for receiving WhatsApp messages
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={loadWebhooks} disabled={loading}>
-            <RefreshCw className={"h-4 w-4 mr-2" + (loading ? " animate-spin" : "")} />
-            Refresh
-          </Button>
-          <Button onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Webhook
-          </Button>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        title="Webhooks"
+        description="Manage webhook endpoints for receiving WhatsApp messages"
+        actions={
+          <>
+            <Button variant="outline" onClick={loadWebhooks} disabled={loading}>
+              <RefreshCw className={"h-4 w-4 mr-2" + (loading ? " animate-spin" : "")} />
+              Refresh
+            </Button>
+            <Button onClick={handleCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Webhook
+            </Button>
+          </>
+        }
+      />
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -206,6 +205,6 @@ export function WebhookList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

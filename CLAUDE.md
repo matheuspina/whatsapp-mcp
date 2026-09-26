@@ -82,7 +82,7 @@ See [SECURITY.md](SECURITY.md) and [docs/configuration.md](docs/configuration.md
 
 **Python:** use `logger` from `lib.utils`, not `print()`; type hints and docstrings on public functions; raise exceptions instead of returning empty on error.
 
-**TypeScript:** strict types; no credentials in browser storage; state from the server, not from `localStorage`.
+**TypeScript:** strict types; no credentials in browser storage; state from the server, not from `localStorage`. Styling: no hardcoded palette colors (`green-500`, hex values) or per-page typography in pages. Use the theme tokens in `globals.css` (`primary`, `success`, `warning`, `destructive`, `muted`), `PageContainer` and `PageHeader` from `components/layout/page.tsx`, and the shared components in `components/common/`.
 
 ## Testing
 

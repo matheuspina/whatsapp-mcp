@@ -1,5 +1,7 @@
 "use client";
 
+import { noticeToneVariants, noticeVariants } from "@/components/common/notice";
+import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { WebhookLog, WhatsAppAPI, getErrorMessage } from "@/lib/api";
 
@@ -120,23 +122,14 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
                 const chatName = payload?.message?.chat_name;
                 const processingTime = payload?.metadata?.processing_time_ms || 0;
 
-                const borderClass = statusInfo.status === "error"
-                  ? "border-destructive/50 bg-destructive/5"
-                  : statusInfo.status === "success"
-                    ? "border-green-500/50 bg-green-500/5"
-                    : "border-yellow-500/50 bg-yellow-500/5";
-
-                const iconClass = statusInfo.status === "error"
-                  ? "text-destructive"
-                  : statusInfo.status === "success"
-                    ? "text-green-500"
-                    : "text-yellow-500";
+                const noticeVariant =
+                  statusInfo.status === "error" ? "destructive" : statusInfo.status === "success" ? "success" : "warning";
 
                 return (
-                  <div key={log.id} className={"border rounded-lg p-4 space-y-2 " + borderClass}>
+                  <div key={log.id} className={cn(noticeVariants({ variant: noticeVariant }), "space-y-2")}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <StatusIcon className={"h-4 w-4 " + iconClass} />
+                        <StatusIcon className={cn("h-4 w-4", noticeToneVariants({ variant: noticeVariant }))} />
                         <Badge variant={statusInfo.status === "error" ? "destructive" : "secondary"}>
                           {statusInfo.label}
                         </Badge>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { PageContainer, PageHeader } from "@/components/layout/page";
 import { PhoneInput, CodeDisplay, Dashboard, SettingsDialog } from "@/components/pairing";
 import { usePairing, useSettings } from "@/lib/store";
 import { WhatsAppAPI } from "@/lib/api";
@@ -47,16 +48,13 @@ export default function PairingPage() {
   }
 
   return (
-    <div className="p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight mb-6">Device Pairing</h1>
-        
+    <PageContainer>
+        <PageHeader title="Device Pairing" />
         {step === "phone" && <PhoneInput />}
         {step === "code" && <CodeDisplay />}
         {step === "dashboard" && <Dashboard onOpenSettings={() => setSettingsOpen(true)} />}
 
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      </div>
-    </div>
+    </PageContainer>
   );
 }
