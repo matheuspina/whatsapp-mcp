@@ -255,6 +255,37 @@ func TestFeedIsFilteredAndLogged(t *testing.T) {
 	}
 }
 
+func TestMessageConversationsStayScopedAndTimelineIsReadOnly(t *testing.T) {
+	s := newTestServer(t, numA, numB)
+	now := time.Now().UTC().Truncate(time.Second)
+	chat := "5511988888888@s.whatsapp.net"
+	for i, instance := range []string{numA, numB} {
+		instanceJID := instance + "@s.whatsapp.net"
+		if err := s.messageStore.StoreChatWithInstance(chat, "Cliente", now.Add(time.Duration(i)*time.Minute), instanceJID); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.messageStore.StoreMessageWithInstance(
+			"M-"+instance, chat, chat, "Cliente", "mensagem "+instance, now.Add(time.Duration(i)*time.Minute), false,
+			"", "", "", "", nil, nil, nil, 0, instanceJID, false,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out := decode(t, call(t, s, s.handleMessageConversations, http.MethodGet, "/api/messages/chats", nil))
+	conversations := out["conversations"].([]any)
+	if len(conversations) != 2 {
+		t.Fatalf("same chat on two instances must produce two conversations, got %d", len(conversations))
+	}
+
+	timeline := decode(t, call(t, s, s.handleMessageConversationMessages, http.MethodGet,
+		"/api/messages/chats/messages?instance="+numA+"&chat_jid="+chat, nil))
+	messages := timeline["messages"].([]any)
+	if len(messages) != 1 || messages[0].(map[string]any)["id"] != "M-"+numA {
+		t.Fatalf("timeline must be scoped to the selected instance: %v", timeline)
+	}
+}
+
 func TestPrivacyEndpoints(t *testing.T) {
 	s := newTestServer(t, numA)
 	now := time.Now().UTC()

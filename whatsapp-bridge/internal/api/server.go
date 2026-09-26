@@ -165,6 +165,8 @@ func (s *Server) registerHandlers() {
 	http.HandleFunc("/api/instances/pair", s.SecureMiddleware(s.handleCreateInstancePair))
 
 	// Audit and governance
+	http.HandleFunc("/api/messages/chats", s.SecureMiddleware(s.handleMessageConversations))
+	http.HandleFunc("/api/messages/chats/messages", s.SecureMiddleware(s.handleMessageConversationMessages))
 	http.HandleFunc("/api/messages/feed", s.SecureMiddleware(s.handleMessageFeed))
 	http.HandleFunc("/api/messages/versions", s.SecureMiddleware(s.handleMessageVersions))
 	http.HandleFunc("/api/access-log", s.SecureMiddleware(s.handleAccessLog))

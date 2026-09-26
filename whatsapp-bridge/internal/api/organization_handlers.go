@@ -563,6 +563,131 @@ func parseTimeParam(r *http.Request, key string) (*time.Time, bool) {
 	return &t, true
 }
 
+func (s *Server) parseMessageFilter(r *http.Request) (database.FeedFilter, string) {
+	q := r.URL.Query()
+	f := database.FeedFilter{
+		ChatJID:     q.Get("chat_jid"),
+		Query:       q.Get("q"),
+		DeletedOnly: q.Get("deleted_only") == "true",
+	}
+	if ref := instanceRef(r); ref != "" {
+		if s.instanceManager == nil {
+			f.InstanceJID = ref
+		} else if c, err := s.instanceManager.ResolveClient(ref); err == nil {
+			f.InstanceJID = c.InstanceJID()
+		} else {
+			f.InstanceJID = ref
+		}
+	}
+	if v, err := strconv.Atoi(q.Get("employee_id")); err == nil {
+		f.EmployeeID = &v
+	}
+	if v, err := strconv.Atoi(q.Get("department_id")); err == nil {
+		f.DepartmentID = &v
+	}
+	if v, err := strconv.Atoi(q.Get("limit")); err == nil {
+		f.Limit = v
+	}
+	var ok bool
+	if f.Since, ok = parseTimeParam(r, "since"); !ok {
+		return f, "since must be RFC 3339"
+	}
+	if f.Until, ok = parseTimeParam(r, "until"); !ok {
+		return f, "until must be RFC 3339"
+	}
+	if f.Before, ok = parseTimeParam(r, "before"); !ok {
+		return f, "before must be RFC 3339"
+	}
+	return f, ""
+}
+
+// handleMessageConversations serves the read-only grouped chat list. A conversation is always
+// keyed by both the monitored number and the chat JID.
+func (s *Server) handleMessageConversations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.fail(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	f, bad := s.parseMessageFilter(r)
+	if bad != "" {
+		s.fail(w, http.StatusBadRequest, bad)
+		return
+	}
+	conversations, err := s.messageStore.ListMessageConversations(f)
+	if err != nil {
+		s.serverError(w, "list message conversations", err)
+		return
+	}
+	s.recordAccess(r, "message-conversations", r.URL.RawQuery, len(conversations))
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":       true,
+		"count":         len(conversations),
+		"conversations": conversations,
+	})
+}
+
+// handleMessageConversationMessages serves a chronological, read-only timeline for one
+// (instance, chat) pair. It deliberately does not share the outbound message routes.
+func (s *Server) handleMessageConversationMessages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.fail(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	f, bad := s.parseMessageFilter(r)
+	if bad != "" {
+		s.fail(w, http.StatusBadRequest, bad)
+		return
+	}
+	if f.ChatJID == "" {
+		s.fail(w, http.StatusBadRequest, "chat_jid is required")
+		return
+	}
+	if f.InstanceJID == "" && s.instanceManager != nil {
+		if only, ok := s.instanceManager.OnlyPairedClient(); ok {
+			f.InstanceJID = only.InstanceJID()
+		} else if s.instanceManager.PairedCount() > 1 {
+			s.fail(w, http.StatusBadRequest, "instance is required when several numbers are connected")
+			return
+		} else if client := s.instanceManager.GetDefaultClient(); client != nil {
+			f.InstanceJID = client.InstanceJID()
+		}
+	}
+
+	// The conversation list may be filtered, but opening a conversation always shows its full
+	// captured history for the selected number and chat.
+	f.Query = ""
+	f.EmployeeID = nil
+	f.DepartmentID = nil
+	f.DeletedOnly = false
+	f.Since = nil
+	f.Until = nil
+	messages, err := s.messageStore.ListMessageFeed(f)
+	if err != nil {
+		s.serverError(w, "list conversation messages", err)
+		return
+	}
+	for left, right := 0, len(messages)-1; left < right; left, right = left+1, right-1 {
+		messages[left], messages[right] = messages[right], messages[left]
+	}
+	s.recordAccess(r, "message-conversation", r.URL.RawQuery, len(messages))
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"count":    len(messages),
+		"messages": messages,
+		"has_more": len(messages) == normalizedMessageLimit(f.Limit),
+	})
+}
+
+func normalizedMessageLimit(limit int) int {
+	if limit <= 0 {
+		return 100
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
+}
+
 // handleMessageFeed serves GET /api/messages/feed: captured messages across numbers, filtered by
 // number, employee, department, chat, text, date range or deletion, newest first. Reading it is
 // recorded in the access log.

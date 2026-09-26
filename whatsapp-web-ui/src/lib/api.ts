@@ -226,6 +226,23 @@ export interface MessageItem {
   is_edited?: boolean;
 }
 
+export interface MessageConversation {
+  instance_jid?: string;
+  instance_alias?: string;
+  chat_jid: string;
+  chat_name?: string;
+  is_group: boolean;
+  last_message?: string;
+  last_sender_name?: string;
+  last_message_time: string;
+  last_is_from_me?: boolean;
+  message_count: number;
+  employee_id?: number;
+  employee_name?: string;
+  department_id?: number;
+  department_name?: string;
+}
+
 /** A captured message with the number, person and department that held it when it was exchanged. */
 export interface FeedMessage {
   id: string;
@@ -602,6 +619,36 @@ export class WhatsAppAPI {
       `/messages/feed${qs ? `?${qs}` : ""}`
     );
     return res.messages || [];
+  }
+
+  async getMessageConversations(filters: FeedFilters = {}): Promise<MessageConversation[]> {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== "" && value !== false) search.set(key, String(value));
+    }
+    const qs = search.toString();
+    const res = await this.request<{ success: boolean; conversations?: MessageConversation[] }>(
+      `/messages/chats${qs ? `?${qs}` : ""}`
+    );
+    return res.conversations || [];
+  }
+
+  async getMessageConversationMessages(
+    instance: string,
+    chatJid: string,
+    limit = 100,
+    before?: string
+  ): Promise<{ messages: FeedMessage[]; hasMore: boolean }> {
+    const search = new URLSearchParams({
+      instance,
+      chat_jid: chatJid,
+      limit: String(limit),
+    });
+    if (before) search.set("before", before);
+    const res = await this.request<{ success: boolean; messages?: FeedMessage[]; has_more?: boolean }>(
+      `/messages/chats/messages?${search.toString()}`
+    );
+    return { messages: res.messages || [], hasMore: res.has_more ?? false };
   }
 
   async getMessageVersions(instance: string, chatJid: string, messageId: string): Promise<MessageVersion[]> {

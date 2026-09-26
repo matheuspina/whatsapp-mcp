@@ -7,6 +7,7 @@ import {
   Filter,
   History,
   Loader2,
+  MessageCircle,
   MessageSquare,
   RotateCcw,
   Search,
@@ -23,6 +24,7 @@ import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/layout/page";
 import { StatCard, StatGrid } from "@/components/common/stat-card";
 import { FeedMessageCard } from "@/components/audit/feed-message";
+import { ConversationChat } from "@/components/messages/conversation-chat";
 import { VersionsDialog } from "@/components/audit/versions-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { WhatsAppAPI, Department, Employee, FeedFilters, FeedMessage, Instance, MessageVersion } from "@/lib/api";
+import { WhatsAppAPI, Department, Employee, FeedFilters, FeedMessage, Instance, MessageConversation, MessageVersion } from "@/lib/api";
 
 const ALL = "all";
 const PAGE_SIZE = 100;
@@ -46,6 +48,10 @@ function errorText(err: unknown, fallback: string): string {
 interface VersionsTarget {
   message: FeedMessage;
   versions: MessageVersion[] | null;
+}
+
+function conversationKey(conversation: MessageConversation): string {
+  return `${conversation.instance_jid || "legacy"}|${conversation.chat_jid}`;
 }
 
 export default function MessagesPage() {
@@ -74,6 +80,14 @@ export default function MessagesPage() {
   const [result, setResult] = useState<{ key: string; messages: FeedMessage[]; exhausted: boolean } | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [versions, setVersions] = useState<VersionsTarget | null>(null);
+  const [displayMode, setDisplayMode] = useState<"chat" | "feed">("chat");
+  const [conversations, setConversations] = useState<MessageConversation[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<MessageConversation | null>(null);
+  const [loadedConversationListKey, setLoadedConversationListKey] = useState<string | null>(null);
+  const [conversationMessages, setConversationMessages] = useState<FeedMessage[]>([]);
+  const [loadedConversationMessagesKey, setLoadedConversationMessagesKey] = useState<string | null>(null);
+  const [conversationHasMore, setConversationHasMore] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -134,8 +148,70 @@ export default function MessagesPage() {
     };
   }, [api, filters, key]);
 
+  useEffect(() => {
+    let ignore = false;
+    api
+      .getMessageConversations(filters)
+      .then((list) => {
+        if (ignore) return;
+        setConversations(list);
+        setSelectedConversation((current) => {
+          if (current) {
+            const same = list.find((conversation) => conversationKey(conversation) === conversationKey(current));
+            if (same) return same;
+          }
+          return list[0] || null;
+        });
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          toast.error("Erro ao carregar conversas", { description: errorText(err, "Falha na comunicação") });
+          setConversations([]);
+          setSelectedConversation(null);
+        }
+      })
+      .finally(() => {
+        if (!ignore) setLoadedConversationListKey(key);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [api, filters, key]);
+
+  useEffect(() => {
+    if (!selectedConversation) {
+      return;
+    }
+
+    let ignore = false;
+    const selectedKey = conversationKey(selectedConversation);
+    api
+      .getMessageConversationMessages(selectedConversation.instance_jid || "", selectedConversation.chat_jid, PAGE_SIZE)
+      .then(({ messages: nextMessages, hasMore }) => {
+        if (ignore) return;
+        setConversationMessages(nextMessages);
+        setConversationHasMore(hasMore);
+        setLoadedConversationMessagesKey(selectedKey);
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          toast.error("Erro ao carregar a conversa", { description: errorText(err, "Falha na comunicação") });
+          setConversationMessages([]);
+          setConversationHasMore(false);
+          setLoadedConversationMessagesKey(selectedKey);
+        }
+      })
+    return () => {
+      ignore = true;
+    };
+  }, [api, selectedConversation]);
+
   const loading = result === null || result.key !== key;
   const messages = loading ? [] : result.messages;
+  const conversationsLoading = loadedConversationListKey !== key;
+  const conversationMessagesLoading = selectedConversation
+    ? loadedConversationMessagesKey !== conversationKey(selectedConversation)
+    : false;
 
   const loadMore = async () => {
     if (loading || messages.length === 0) return;
@@ -147,6 +223,25 @@ export default function MessagesPage() {
       toast.error("Erro ao carregar mais mensagens", { description: errorText(err, "Falha na comunicação") });
     } finally {
       setLoadingMore(false);
+    }
+  };
+
+  const loadOlderConversationMessages = async () => {
+    if (!selectedConversation || conversationMessages.length === 0 || loadingOlderMessages) return;
+    try {
+      setLoadingOlderMessages(true);
+      const older = await api.getMessageConversationMessages(
+        selectedConversation.instance_jid || "",
+        selectedConversation.chat_jid,
+        PAGE_SIZE,
+        conversationMessages[0].timestamp
+      );
+      setConversationMessages([...older.messages, ...conversationMessages]);
+      setConversationHasMore(older.hasMore);
+    } catch (err: unknown) {
+      toast.error("Erro ao carregar mensagens anteriores", { description: errorText(err, "Falha na comunicação") });
+    } finally {
+      setLoadingOlderMessages(false);
     }
   };
 
@@ -237,6 +332,28 @@ export default function MessagesPage() {
       <PageHeader
         title="Auditoria de Mensagens"
         description="Histórico unificado de conversas capturadas pelos números monitorados com rastreabilidade de operadores."
+        actions={
+          <div className="flex items-center rounded-lg border bg-muted/30 p-0.5">
+            <Button
+              variant={displayMode === "chat" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 gap-1.5 px-2.5 text-xs"
+              onClick={() => setDisplayMode("chat")}
+            >
+              <MessageCircle className="size-3.5" />
+              Conversas
+            </Button>
+            <Button
+              variant={displayMode === "feed" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 gap-1.5 px-2.5 text-xs"
+              onClick={() => setDisplayMode("feed")}
+            >
+              <MessageSquare className="size-3.5" />
+              Auditoria
+            </Button>
+          </div>
+        }
       />
 
       <StatGrid columns={4}>
@@ -585,8 +702,20 @@ export default function MessagesPage() {
         </div>
       </Card>
 
-      {/* Feed list */}
-      {loading ? (
+      {/* Grouped chat view / legacy audit feed */}
+      {displayMode === "chat" ? (
+        <ConversationChat
+          conversations={conversations}
+          selectedConversation={selectedConversation}
+          onSelectConversation={setSelectedConversation}
+          conversationsLoading={conversationsLoading}
+          messages={conversationMessages}
+          messagesLoading={conversationMessagesLoading}
+          hasMore={conversationHasMore}
+          onLoadOlder={loadOlderConversationMessages}
+          loadingOlder={loadingOlderMessages}
+        />
+      ) : loading ? (
         <Card className="p-12">
           <div className="flex flex-col items-center justify-center gap-3 text-center">
             <Loader2 className="size-8 animate-spin text-primary" />

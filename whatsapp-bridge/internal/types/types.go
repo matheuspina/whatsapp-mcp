@@ -99,6 +99,26 @@ type Chat struct {
 	LastMessageTimeAgo       string           `json:"last_message_time_ago,omitempty"`
 }
 
+// MessageConversation is a read-only summary used by the web panel's grouped chat view.
+// Conversations are scoped by both instance and chat JID because the same chat JID can exist
+// on more than one monitored number.
+type MessageConversation struct {
+	InstanceJID     string    `json:"instance_jid,omitempty"`
+	InstanceAlias   string    `json:"instance_alias,omitempty"`
+	ChatJID         string    `json:"chat_jid"`
+	ChatName        string    `json:"chat_name,omitempty"`
+	IsGroup         bool      `json:"is_group"`
+	LastMessage     string    `json:"last_message,omitempty"`
+	LastSenderName  string    `json:"last_sender_name,omitempty"`
+	LastMessageTime time.Time `json:"last_message_time"`
+	LastIsFromMe    bool      `json:"last_is_from_me,omitempty"`
+	MessageCount    int       `json:"message_count"`
+	EmployeeID      *int      `json:"employee_id,omitempty"`
+	EmployeeName    string    `json:"employee_name,omitempty"`
+	DepartmentID    *int      `json:"department_id,omitempty"`
+	DepartmentName  string    `json:"department_name,omitempty"`
+}
+
 // Contact represents a WhatsApp contact
 type Contact struct {
 	JID                        string         `json:"jid,omitempty"`

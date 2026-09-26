@@ -210,6 +210,121 @@ func (store *MessageStore) ListMessageFeed(f FeedFilter) ([]types.FeedMessage, e
 	return out, rows.Err()
 }
 
+// ListMessageConversations groups captured messages by (instance_jid, chat_jid) for the
+// read-only chat view. Filters are applied to messages before grouping so a search can narrow
+// the conversation list without changing the identity of a conversation.
+func (store *MessageStore) ListMessageConversations(f FeedFilter) ([]types.MessageConversation, error) {
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > maxFeedLimit {
+		limit = maxFeedLimit
+	}
+
+	var where []string
+	var args []any
+	if f.InstanceJID != "" {
+		where = append(where, "m.instance_jid = ?")
+		args = append(args, f.InstanceJID)
+	}
+	if f.EmployeeID != nil {
+		where = append(where, "a.employee_id = ?")
+		args = append(args, *f.EmployeeID)
+	}
+	if f.DepartmentID != nil {
+		where = append(where, "e.department_id = ?")
+		args = append(args, *f.DepartmentID)
+	}
+	if f.DeletedOnly {
+		where = append(where, "m.is_deleted_remote = 1")
+	}
+	if q := strings.TrimSpace(f.Query); q != "" {
+		where = append(where, `(m.content LIKE ? ESCAPE '\\' OR m.sender_name LIKE ? ESCAPE '\\')`)
+		like := "%" + escapeLike(q) + "%"
+		args = append(args, like, like)
+	}
+	if f.Since != nil {
+		where = append(where, "datetime(m.timestamp) >= datetime(?)")
+		args = append(args, *f.Since)
+	}
+	if f.Until != nil {
+		where = append(where, "datetime(m.timestamp) < datetime(?)")
+		args = append(args, *f.Until)
+	}
+	if f.Before != nil {
+		where = append(where, "datetime(m.timestamp) < datetime(?)")
+		args = append(args, *f.Before)
+	}
+	if f.ChatJID != "" {
+		where = append(where, "m.chat_jid = ?")
+		args = append(args, f.ChatJID)
+	}
+
+	query := `
+		WITH ranked AS (
+			SELECT m.instance_jid AS instance_jid, COALESCE(i.alias, '') AS instance_alias,
+			       m.chat_jid AS chat_jid, COALESCE(c.name, '') AS chat_name,
+			       COALESCE(m.content, '') AS last_message, COALESCE(m.sender_name, '') AS last_sender_name,
+			       m.timestamp AS last_message_time, COALESCE(m.is_from_me, 0) AS last_is_from_me,
+			       a.employee_id AS employee_id, COALESCE(e.name, '') AS employee_name,
+			       e.department_id AS department_id, COALESCE(d.name, '') AS department_name,
+			       ROW_NUMBER() OVER (
+				       PARTITION BY m.instance_jid, m.chat_jid
+				       ORDER BY m.timestamp DESC, m.rowid DESC
+			       ) AS message_rank,
+			       COUNT(*) OVER (PARTITION BY m.instance_jid, m.chat_jid) AS message_count
+			FROM messages m
+			LEFT JOIN chats c ON c.jid = m.chat_jid
+			LEFT JOIN instances i ON i.phone_jid = m.instance_jid
+			LEFT JOIN instance_assignments a ON a.instance_id = i.id
+				AND datetime(m.timestamp) >= datetime(a.valid_from)
+				AND (a.valid_to IS NULL OR datetime(m.timestamp) < datetime(a.valid_to))
+			LEFT JOIN employees e ON e.id = a.employee_id
+			LEFT JOIN departments d ON d.id = e.department_id`
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += `
+		)
+		SELECT instance_jid, instance_alias, chat_jid, chat_name, last_message, last_sender_name,
+		       last_message_time, last_is_from_me, employee_id, employee_name, department_id,
+		       department_name, message_count
+		FROM ranked
+		WHERE message_rank = 1
+		ORDER BY last_message_time DESC
+		LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := store.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list message conversations: %w", err)
+	}
+	defer rows.Close()
+
+	out := []types.MessageConversation{}
+	for rows.Next() {
+		var c types.MessageConversation
+		var employeeID, departmentID sql.NullInt64
+		if err := rows.Scan(&c.InstanceJID, &c.InstanceAlias, &c.ChatJID, &c.ChatName,
+			&c.LastMessage, &c.LastSenderName, &c.LastMessageTime, &c.LastIsFromMe,
+			&employeeID, &c.EmployeeName, &departmentID, &c.DepartmentName, &c.MessageCount); err != nil {
+			return nil, err
+		}
+		c.IsGroup = strings.HasSuffix(c.ChatJID, "@g.us")
+		if employeeID.Valid {
+			id := int(employeeID.Int64)
+			c.EmployeeID = &id
+		}
+		if departmentID.Valid {
+			id := int(departmentID.Int64)
+			c.DepartmentID = &id
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 func escapeLike(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	return r.Replace(s)
