@@ -127,8 +127,18 @@ func TestLegacyDatabaseMigratesWithoutLosingData(t *testing.T) {
 	}
 
 	// Every step is recorded, and reopening applies nothing again.
-	if n := countRows(t, store, "SELECT COUNT(*) FROM schema_migrations"); n != 3 {
-		t.Errorf("expected 3 recorded migrations, got %d", n)
+	if n := countRows(t, store, "SELECT COUNT(*) FROM schema_migrations"); n != 4 {
+		t.Errorf("expected 4 recorded migrations, got %d", n)
+	}
+	// The media storage tables (005) were added to the legacy database, and queue a file.
+	for _, table := range []string{"message_media", "media_folders", "app_settings"} {
+		if countRows(t, store, "SELECT COUNT(*) FROM sqlite_master WHERE name = ?", table) != 1 {
+			t.Errorf("table %s missing after migrating a legacy database", table)
+		}
+	}
+	if err := store.RecordMedia(MediaRecord{InstanceJID: "5511@s.whatsapp.net", ChatJID: "a@s.whatsapp.net", MessageID: "M3",
+		MediaType: "image", Status: MediaPendingUpload, LocalPath: "store/media/x.jpg"}); err != nil {
+		t.Errorf("RecordMedia on a migrated database: %v", err)
 	}
 	store.Close()
 	again, err := NewMessageStore()
@@ -143,7 +153,7 @@ func TestLegacyDatabaseMigratesWithoutLosingData(t *testing.T) {
 
 func TestFreshDatabaseHasFinalSchema(t *testing.T) {
 	store := newTestStore(t)
-	for _, table := range []string{"messages", "instances", "chat_instances", "instance_assignments", "message_versions", "access_log", "privacy_log", "schema_migrations"} {
+	for _, table := range []string{"messages", "instances", "chat_instances", "instance_assignments", "message_versions", "access_log", "privacy_log", "schema_migrations", "message_media", "media_folders", "app_settings"} {
 		if countRows(t, store, "SELECT COUNT(*) FROM sqlite_master WHERE name = ?", table) != 1 {
 			t.Errorf("table %s missing", table)
 		}

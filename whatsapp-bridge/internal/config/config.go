@@ -51,6 +51,12 @@ type Config struct {
 	InstanceAllowSendDefault bool
 	// MAX_PENDING_PAIRINGS limits QR pairings in progress at the same time (default 5).
 	MaxPendingPairings int
+
+	// Media pipeline. MEDIA_DOWNLOAD_WORKERS caps simultaneous downloads from the WhatsApp CDN
+	// (default 4); MEDIA_UPLOAD_WORKERS caps simultaneous uploads to object storage (default 4).
+	// The bucket itself is configured in the panel or with the S3_* variables.
+	MediaDownloadWorkers int
+	MediaUploadWorkers   int
 }
 
 // IsPlaceholder reports whether a secret still holds the example value shipped in
@@ -81,6 +87,9 @@ func NewConfig() *Config {
 		// Governance defaults
 		InstanceAllowSendDefault: true,
 		MaxPendingPairings:       5,
+		// Media pipeline defaults
+		MediaDownloadWorkers: 4,
+		MediaUploadWorkers:   4,
 	}
 
 	if v := os.Getenv("RETENTION_DAYS"); v != "" {
@@ -95,6 +104,17 @@ func NewConfig() *Config {
 	if v := os.Getenv("MAX_PENDING_PAIRINGS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.MaxPendingPairings = n
+		}
+	}
+
+	if v := os.Getenv("MEDIA_DOWNLOAD_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.MediaDownloadWorkers = n
+		}
+	}
+	if v := os.Getenv("MEDIA_UPLOAD_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.MediaUploadWorkers = n
 		}
 	}
 

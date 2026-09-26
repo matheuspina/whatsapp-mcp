@@ -6,6 +6,7 @@ import (
 
 	"whatsapp-bridge/internal/auth"
 	"whatsapp-bridge/internal/database"
+	"whatsapp-bridge/internal/mediastore"
 	"whatsapp-bridge/internal/webhook"
 	"whatsapp-bridge/internal/whatsapp"
 )
@@ -18,6 +19,7 @@ type Server struct {
 	instanceManager *whatsapp.InstanceManager
 	messageStore    *database.MessageStore
 	webhookManager  *webhook.Manager
+	mediaStore      *mediastore.Manager
 	port            int
 	bindHost        string
 
@@ -141,6 +143,12 @@ func (s *Server) registerHandlers() {
 
 	// Media download
 	http.HandleFunc("/api/download", s.SecureMiddleware(s.handleDownload))
+
+	// Media object storage: settings edited in the panel, and links to stored media
+	http.HandleFunc("/api/settings/media-storage", s.SecureMiddleware(s.handleMediaStorage))
+	http.HandleFunc("/api/settings/media-storage/test", s.SecureMiddleware(s.handleMediaStorageTest))
+	http.HandleFunc("/api/settings/media-storage/retry", s.SecureMiddleware(s.handleMediaStorageRetry))
+	http.HandleFunc("/api/media/url", s.SecureMiddleware(s.handleMediaURL))
 
 	// Sync status monitoring
 	http.HandleFunc("/api/sync-status", s.SecureMiddleware(s.handleSyncStatus))

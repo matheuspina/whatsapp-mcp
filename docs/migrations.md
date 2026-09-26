@@ -24,6 +24,7 @@ Migrations `002` onward are applied **by the bridge itself at startup**, in orde
 | `002_add_organization_and_instances` | Departments, employees, instances, and the `instance_jid` / `is_deleted_remote` columns. |
 | `003_instance_scoped_keys` | Rebuilds `messages` so its primary key is `(instance_jid, chat_jid, id)` (two numbers can hold the same message) and `instances` so `phone_jid` may be empty while pairing. Written in Go because SQLite cannot change a key in place. |
 | `004_governance` | `chat_instances`, `instance_assignments`, `message_versions`, `access_log`, `privacy_log`, the governance columns of `instances`, the `messages_unique` view. |
+| `005_media_storage` | `message_media` (where each media file lives, and the upload queue), `media_folders` (the bucket folder of each chat) and `app_settings` (settings edited in the panel). Append-only: new tables and indexes only. See [media-storage.md](media-storage.md). |
 
 `003` is the one migration that rebuilds tables, which is an exception to the append-only rule, so it is careful:
 

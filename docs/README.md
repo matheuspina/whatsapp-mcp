@@ -12,6 +12,7 @@
 | [Database](database.md) | SQLite schema, what is and is not captured |
 | [Migrations](migrations.md) | Running schema migrations on an existing installation |
 | [Governance](governance.md) | Several numbers, people and departments, audit trail, access policy for AI clients, corporate attestation, LGPD |
+| [Media storage](media-storage.md) | Keeping media in Cloudflare R2, S3 or MinIO: the upload queue, folder layout, settings, reading files back |
 | [Search](search.md) | Local hybrid search: the indexer, chunking, local embeddings, and the `search_messages` / `index_status` tools |
 | [Response design](response-design.md) | Why tool responses carry raw data instead of interpretation |
 

@@ -108,6 +108,17 @@ See [governance.md](governance.md).
 | `WA_PRESENCE_MODE` | `human` | `human` stays offline except briefly around outgoing activity; `always_online` stays online while connected. |
 | `PRESENCE_LINGER_MIN` / `PRESENCE_LINGER_MAX` | `8s` / `15s` | How long `human` mode stays online after sending. |
 
+### Media storage
+
+Where downloaded media goes (Cloudflare R2, S3, MinIO). Edited in *Settings > Media storage* or set with the `S3_*`
+variables; see [media-storage.md](media-storage.md) for the full list.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `S3_BUCKET` | *(none)* | Configures object storage from the environment (the panel form becomes read-only). |
+| `MEDIA_DOWNLOAD_WORKERS` | `4` | Media files downloaded from WhatsApp at the same time. |
+| `MEDIA_UPLOAD_WORKERS` | `4` | Media files uploaded to the bucket at the same time. |
+
 ### Send throttling (anti-ban)
 
 Off by default. Adds human-like delays and a warm-up ramp to outgoing messages.

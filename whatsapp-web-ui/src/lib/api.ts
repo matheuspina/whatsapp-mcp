@@ -45,6 +45,36 @@ export interface SyncStatusResponse {
   recommendations?: string[];
 }
 
+// Media object storage (Cloudflare R2, S3, MinIO, ...)
+export interface MediaStorageConfig {
+  enabled: boolean;
+  endpoint: string;
+  region: string;
+  bucket: string;
+  access_key_id: string;
+  path_style: boolean;
+  prefix: string;
+  keep_local: boolean;
+  public_base_url: string;
+  /** True when a secret access key is stored. The key itself never leaves the server. */
+  secret_set: boolean;
+}
+
+export interface MediaStorageStatus {
+  config: MediaStorageConfig;
+  /** Where the active configuration comes from: environment variables lock the form. */
+  source: "none" | "env" | "panel";
+  active: boolean;
+  warning?: string;
+  last_error?: string;
+  /** Files by state: local, pending_upload, uploading, uploaded, failed. */
+  queue: Record<string, number>;
+  workers: number;
+}
+
+/** What the form submits. An empty secret_access_key keeps the stored one. */
+export type MediaStorageInput = Omit<MediaStorageConfig, "secret_set"> & { secret_access_key?: string };
+
 // Webhook types
 export interface WebhookTrigger {
   trigger_type: "all" | "chat_jid" | "instance_jid" | "sender" | "keyword" | "media_type";
@@ -344,6 +374,33 @@ export class WhatsAppAPI {
 
   async revokeSession(id: string): Promise<void> {
     await this.request(`/auth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  // Media object storage settings
+  async getMediaStorage(): Promise<MediaStorageStatus> {
+    const res = await this.request<{ data: MediaStorageStatus }>("/settings/media-storage");
+    return res.data;
+  }
+
+  async saveMediaStorage(input: MediaStorageInput): Promise<MediaStorageStatus> {
+    const res = await this.request<{ data: MediaStorageStatus }>("/settings/media-storage", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+    return res.data;
+  }
+
+  async testMediaStorage(input: MediaStorageInput): Promise<string> {
+    const res = await this.request<{ message?: string }>("/settings/media-storage/test", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return res.message || "Connection works";
+  }
+
+  async retryFailedMedia(): Promise<number> {
+    const res = await this.request<{ queued: number }>("/settings/media-storage/retry", { method: "POST" });
+    return res.queued;
   }
 
   // Pairing methods

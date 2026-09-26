@@ -24,6 +24,7 @@ var schemaMigrationSteps = []schemaMigration{
 	{version: "002_add_organization_and_instances", file: "002_add_organization_and_instances.sql"},
 	{version: "003_instance_scoped_keys", fn: migrateInstanceScopedKeys},
 	{version: "004_governance", file: "004_governance.sql"},
+	{version: "005_media_storage", file: "005_media_storage.sql"},
 }
 
 // applySchemaMigrations runs every step not yet recorded in schema_migrations, in order.

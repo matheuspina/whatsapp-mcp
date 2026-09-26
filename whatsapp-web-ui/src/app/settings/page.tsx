@@ -3,6 +3,7 @@
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { ActiveSessions } from "@/components/settings/active-sessions";
+import { MediaStorage } from "@/components/settings/media-storage";
 import { PageContainer, PageHeader } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +27,7 @@ export default function SettingsPage() {
 
   return (
     <PageContainer size="narrow">
-        <PageHeader title="Settings" description="Account, sessions and appearance" />
+        <PageHeader title="Settings" description="Account, sessions, media storage and appearance" />
 
         <Card>
           <CardHeader>
@@ -47,6 +48,8 @@ export default function SettingsPage() {
         </Card>
 
         <ActiveSessions />
+
+        <MediaStorage />
 
         <Card>
           <CardHeader>

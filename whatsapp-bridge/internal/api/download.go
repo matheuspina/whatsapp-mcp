@@ -65,6 +65,14 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A file this bridge already downloaded (or uploaded to object storage) is served from there:
+	// the WhatsApp CDN drops old media, so it is the copy that lasts.
+	if path, size, ok := s.storedMediaPath(r.Context(), req.ChatJID, req.MessageID); ok {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "path": path, "size": size})
+		return
+	}
+
 	var (
 		mediaType, url, filename string
 		mediaKey                 []byte

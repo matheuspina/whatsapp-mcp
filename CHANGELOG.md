@@ -9,6 +9,10 @@ Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 
 ### Changed
 
+- Media downloads stream to disk (`store/media/<chat>/<message id>.<ext>`) through a bounded pool
+  (`MEDIA_DOWNLOAD_WORKERS`) instead of one unbounded goroutine per message and the whole file in memory. The file is
+  named after the message id, not the arrival time, so two media received in the same second no longer overwrite each
+  other. Failed downloads are recorded instead of only logged.
 - **Several WhatsApp numbers.** The bridge now runs one client per paired number; every event, connection state,
   reconnection and presence loop belongs to its own number. One number logging out, timing out or being replaced no
   longer disconnects the others or restarts the container; the watchdog exits only when every paired number has been
@@ -30,6 +34,14 @@ Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
   renews itself), *Mensagens* is now a unified feed filtered by department, employee, number, text and dates.
 
 ### Added
+
+- **Media storage in an S3-compatible bucket** (Cloudflare R2, Amazon S3, MinIO, ...). Downloaded media is queued and
+  uploaded in the background by a bounded worker pool, then registered in the new `message_media` table (migration
+  `005`). Files are organized by department, employee, number and conversation; the location of every file is in the
+  database, so the agent can always reach it. Configured in *Settings > Media storage* (credentials stored encrypted)
+  or with `S3_*` variables. New routes `GET/PUT /api/settings/media-storage`, `POST .../test`, `POST .../retry`,
+  `GET /api/media/url`; `POST /api/download` reads from the local copy or the bucket before asking the WhatsApp CDN.
+  See [docs/media-storage.md](docs/media-storage.md).
 
 - Organization model: departments, employees, numbers, and the history of who held each number (`instance_assignments`),
   so messages stay with whoever held the number at the time. REST endpoints and panel pages for all of it.

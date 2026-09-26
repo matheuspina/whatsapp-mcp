@@ -17,6 +17,7 @@ import (
 	"whatsapp-bridge/internal/auth"
 	"whatsapp-bridge/internal/config"
 	"whatsapp-bridge/internal/database"
+	"whatsapp-bridge/internal/mediastore"
 	localTypes "whatsapp-bridge/internal/types"
 	"whatsapp-bridge/internal/webhook"
 	"whatsapp-bridge/internal/whatsapp"
@@ -139,6 +140,21 @@ func main() {
 	messageStore.SetWriteErrorHandler(func(err error) {
 		logger.Warnf("Queued database write failed: %v", err)
 	})
+
+	// Media pipeline: downloads are bounded and streamed to disk, then queued for upload to the
+	// object storage configured in the panel (or S3_* variables). It must be in place before any
+	// client connects, since the first message may carry media.
+	mediaManager := mediastore.NewManager(messageStore, logger, mediastore.Options{
+		APIKey:        apiKey,
+		UploadWorkers: cfg.MediaUploadWorkers,
+	})
+	if err := mediaManager.Start(); err != nil {
+		logger.Errorf("Failed to start media storage: %v", err)
+		os.Exit(1)
+	}
+	defer mediaManager.Stop()
+	whatsapp.SetMediaSink(mediaManager)
+	whatsapp.SetMediaDownloadConcurrency(cfg.MediaDownloadWorkers)
 
 	// Initialize WhatsApp InstanceManager (manages pool of multi-device WhatsApp accounts)
 	instanceManager, err := whatsapp.NewInstanceManager(logger, cfg, messageStore)
@@ -356,6 +372,7 @@ func main() {
 	}
 	server := api.NewServer(client, messageStore, webhookManager, cfg.APIPort, cfg.APIBindHost, sessions, cfg.WebUIUsername, cfg.WebUIPassword)
 	server.SetInstanceManager(instanceManager)
+	server.SetMediaStore(mediaManager)
 	server.Start()
 	fmt.Println("✓ REST API server started on port " + fmt.Sprintf("%d", cfg.APIPort))
 
