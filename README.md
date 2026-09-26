@@ -98,15 +98,19 @@ server of this project. (Text the assistant reads through a tool does reach your
 <table>
   <tr>
     <td width="50%"><img src="docs/assets/screenshot-login.png" alt="Sign-in page"><br><sub><b>Sign in</b> with the username and password from your <code>.env</code></sub></td>
-    <td width="50%"><img src="docs/assets/screenshot-dashboard.png" alt="Device pairing dashboard"><br><sub><b>Pairing and sync status</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshot-instances.png" alt="WhatsApp numbers"><br><sub><b>WhatsApp numbers</b>, each with an owner, a send permission and its live status</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/assets/screenshot-sessions.png" alt="Active sessions"><br><sub><b>Active sessions</b>, kept on the server and visible from any browser</sub></td>
+    <td width="50%"><img src="docs/assets/screenshot-messages.png" alt="Message browser"><br><sub><b>Messages</b> from every number, filtered by department, person, text and date</sub></td>
+    <td width="50%"><img src="docs/assets/screenshot-audit.png" alt="Audit of deleted messages"><br><sub><b>Audit</b> of deleted messages, data access and privacy requests</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/assets/screenshot-webhooks.png" alt="Webhook manager"><br><sub><b>Webhook manager</b></sub></td>
+    <td width="50%"><img src="docs/assets/screenshot-mcp.png" alt="AI assistant connection guide"><br><sub><b>AI assistants</b>: copy the connection command for Claude, Cursor and others</sub></td>
   </tr>
 </table>
 
-<sub>Screenshots use invented data.</sub>
+<sub>Screenshots use invented data. The panel interface is in Portuguese.</sub>
 
 ## Architecture
 
