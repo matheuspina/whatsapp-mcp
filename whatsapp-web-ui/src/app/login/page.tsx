@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, LogIn, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { APIError, WhatsAppAPI } from "@/lib/api";
@@ -92,7 +92,6 @@ export default function LoginPage() {
         <CardHeader className="items-center text-center">
           <MessageSquare className="mx-auto mb-2 h-10 w-10 text-success" />
           <CardTitle>WhatsApp MCP</CardTitle>
-          <CardDescription>by Matheus Pina</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
