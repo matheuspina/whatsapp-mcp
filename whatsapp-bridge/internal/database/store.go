@@ -42,6 +42,12 @@ func NewMessageStore() (*MessageStore, error) {
 		return nil, fmt.Errorf("failed to run migrations: %v", err)
 	}
 
+	// Create indexes after tables and migrations are applied
+	if err = createIndexes(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to create indexes: %v", err)
+	}
+
 	store := &MessageStore{db: db}
 	store.ensureWriter()
 
@@ -158,18 +164,6 @@ func runMigrations(db *sql.DB) error {
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
 		);
-
-		CREATE INDEX IF NOT EXISTS idx_messages_instance_chat
-			ON messages(instance_jid, chat_jid, timestamp DESC);
-
-		CREATE INDEX IF NOT EXISTS idx_messages_is_deleted
-			ON messages(is_deleted_remote);
-
-		CREATE INDEX IF NOT EXISTS idx_employees_department
-			ON employees(department_id);
-
-		CREATE INDEX IF NOT EXISTS idx_instances_employee
-			ON instances(employee_id);
 	`)
 
 	return nil
@@ -250,18 +244,6 @@ func createTables(db *sql.DB) error {
 			FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_messages_instance_chat
-			ON messages(instance_jid, chat_jid, timestamp DESC);
-
-		CREATE INDEX IF NOT EXISTS idx_messages_is_deleted
-			ON messages(is_deleted_remote);
-
-		CREATE INDEX IF NOT EXISTS idx_employees_department
-			ON employees(department_id);
-
-		CREATE INDEX IF NOT EXISTS idx_instances_employee
-			ON instances(employee_id);
-
 		CREATE TABLE IF NOT EXISTS contact_nicknames (
 			jid TEXT PRIMARY KEY,
 			nickname TEXT NOT NULL,
@@ -304,6 +286,26 @@ func createTables(db *sql.DB) error {
 		);
 	`)
 	return err
+}
+
+// createIndexes creates all indexes after tables and migration columns are guaranteed to exist
+func createIndexes(db *sql.DB) error {
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_media_type ON messages(media_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_chats_last_message_time ON chats(last_message_time DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_instance_chat ON messages(instance_jid, chat_jid, timestamp DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_is_deleted ON messages(is_deleted_remote)`,
+		`CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_instances_employee ON instances(employee_id)`,
+	}
+	for _, idx := range indexes {
+		if _, err := db.Exec(idx); err != nil {
+			return fmt.Errorf("failed to create index (%s): %w", idx, err)
+		}
+	}
+	return nil
 }
 
 // Close the database connection and cleanly flush the writer queue

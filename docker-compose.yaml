@@ -69,6 +69,7 @@ services:
     environment:
       - INDEX_DB_PATH=/app/index/index.db
       - EMBEDDING_CACHE_DIR=/app/models
+      - HF_HOME=/app/models
       - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-fastembed}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
@@ -150,6 +151,7 @@ services:
       - TZ=UTC
       - INDEX_DB_PATH=/app/index/index.db
       - EMBEDDING_CACHE_DIR=/app/models
+      - HF_HOME=/app/models
       - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-fastembed}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
       - EMBED_BATCH_SIZE=${EMBED_BATCH_SIZE:-32}
