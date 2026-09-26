@@ -38,6 +38,16 @@ def _get_headers() -> dict[str, str]:
     logger.info(f"[BRIDGE-HEADERS] API_KEY loaded: {bool(api_key)}")
     if api_key:
         headers["X-API-Key"] = api_key
+
+    # Which client is acting and which number it asked to act as (see lib.access).
+    from . import access
+
+    scope = access.current_scope()
+    if scope.client_id != "local":
+        headers["X-Actor"] = scope.client_id
+    instance = access.current_instance()
+    if instance:
+        headers["X-Instance"] = instance
     return headers
 
 

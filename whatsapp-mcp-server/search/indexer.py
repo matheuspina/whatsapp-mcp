@@ -49,13 +49,15 @@ def run_once(
 
     Returns the number of raw rows read (0 means caught up).
     """
+    apply_privacy_events(store, messages_db_path)
     cursor = store.get_cursor()
     batch = source.fetch_messages_after(messages_db_path, cursor, limit)
     if not batch:
         store.set_meta("last_run_at", datetime.now(UTC).isoformat())
         return 0
 
-    by_chat: dict[str, list[IndexedMessage]] = {}
+    # One conversation per (number, chat): the same customer talking to two numbers is two conversations.
+    by_chat: dict[tuple[str, str], list[IndexedMessage]] = {}
     max_rowid = cursor
     for raw in batch:
         max_rowid = max(max_rowid, raw.rowid)
@@ -72,27 +74,58 @@ def run_once(
             sender_name=sender_name,
             from_me=raw.is_from_me,
             text=text,
-            instance_jid=raw.instance_jid,
+            instance_jid=raw.instance_jid or "",
             is_deleted_remote=raw.is_deleted_remote,
         )
-        by_chat.setdefault(raw.chat_jid, []).append(indexed)
+        by_chat.setdefault((raw.instance_jid or "", raw.chat_jid), []).append(indexed)
 
     all_rows = [row for rows in by_chat.values() for row in rows]
     store.upsert_messages(all_rows)
 
     if by_chat:
-        chat_names = source.get_chat_names(messages_db_path, set(by_chat))
+        chat_names = source.get_chat_names(messages_db_path, {chat_jid for _, chat_jid in by_chat})
         cfg = chunk_config()
-        for chat_jid, rows in by_chat.items():
+        for (instance_jid, chat_jid), rows in by_chat.items():
             chat_name = resolver.resolve_chat_name(chat_jid, chat_names.get(chat_jid))
             is_group = chat_jid.endswith("@g.us")
             min_ts = min(r.ts for r in rows)
             max_ts = max(r.ts for r in rows)
-            rebuild_chat_region(store, chat_jid, chat_name, is_group, min_ts, max_ts, cfg)
+            rebuild_chat_region(store, chat_jid, chat_name, is_group, min_ts, max_ts, cfg, instance_jid)
 
     store.set_cursor(max_rowid)
     store.set_meta("last_run_at", datetime.now(UTC).isoformat())
     return len(batch)
+
+
+def apply_privacy_events(store: IndexStore, messages_db_path: str, cfg: ChunkConfig | None = None) -> int:
+    """Forget what the bridge's privacy log says was anonymized or purged. Returns events applied.
+
+    The bridge rewrites the affected messages, which the indexer picks up like any change, but it
+    cannot reach index.db: the old chat identifier (a phone number) and text would otherwise stay
+    searchable. The log entries carry what to drop.
+    """
+    cursor = int(store.get_meta("privacy_cursor") or 0)
+    events = source.fetch_privacy_events(messages_db_path, cursor)
+    if not events:
+        return 0
+
+    cfg = cfg or chunk_config()
+    for event in events:
+        if event.action == "anonymize":
+            for chat_jid in event.details.get("chat_jids", []):
+                store.purge_chat(chat_jid)
+        elif event.action == "purge" and event.details.get("cutoff"):
+            cutoff = int(datetime.fromisoformat(event.details["cutoff"]).timestamp())
+            store.purge_before(cutoff)
+        store.set_meta("privacy_cursor", str(event.id))
+
+    # Messages that outlived their chunk get a new one.
+    for instance_jid, chat_jid, min_ts, max_ts in store.unchunked_ranges():
+        rebuild_chat_region(
+            store, chat_jid, chat_jid.split("@")[0], chat_jid.endswith("@g.us"), min_ts, max_ts, cfg, instance_jid
+        )
+    logger.info("search indexer: applied %d privacy events", len(events))
+    return len(events)
 
 
 def embed_pending(store: IndexStore, embedder: Embedder, batch_size: int = EMBED_BATCH_SIZE) -> int:

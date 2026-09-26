@@ -14,6 +14,38 @@ This guide covers how to run database migrations safely for existing WhatsApp MC
 
 ---
 
+## Automatic migrations (002 and later)
+
+Migrations `002` onward are applied **by the bridge itself at startup**, in order, each recorded in the
+`schema_migrations` table so it runs once. You do not run them by hand; the manual steps below are for `001` only.
+
+| Version | What it does |
+|---------|--------------|
+| `002_add_organization_and_instances` | Departments, employees, instances, and the `instance_jid` / `is_deleted_remote` columns. |
+| `003_instance_scoped_keys` | Rebuilds `messages` so its primary key is `(instance_jid, chat_jid, id)` (two numbers can hold the same message) and `instances` so `phone_jid` may be empty while pairing. Written in Go because SQLite cannot change a key in place. |
+| `004_governance` | `chat_instances`, `instance_assignments`, `message_versions`, `access_log`, `privacy_log`, the governance columns of `instances`, the `messages_unique` view. |
+
+`003` is the one migration that rebuilds tables, which is an exception to the append-only rule, so it is careful:
+
+- it only runs when the old shape is detected, and inside one transaction;
+- before touching anything it writes a consistent copy of the database next to it
+  (`store/messages.db.pre-003.bak`, via `VACUUM INTO`); delete it once you are satisfied;
+- rows keep their `rowid`, which the search indexer uses as its resume cursor;
+- messages captured before numbers existed keep an empty `instance_jid`. If exactly one number is paired, the bridge
+  attributes them to it at startup (and moves their `rowid` forward so the indexer re-reads them). With several numbers
+  paired they stay unattributed and a warning is logged.
+
+The search index (`index.db`) is derived data and its schema changed with this release (chunks are per number and chat).
+The indexer discards an index with the old schema and rebuilds it from `messages.db`, including the embeddings, on its
+next start. Nothing has to be done by hand; expect a backfill.
+
+Adding a migration: put the SQL in `whatsapp-bridge/migrations/NNN_name.sql` (idempotent: `IF NOT EXISTS`; a repeated
+`ALTER TABLE ... ADD COLUMN` is tolerated), add it to `schemaMigrationSteps` in
+`whatsapp-bridge/internal/database/migrate.go`, and document it here. Logic that cannot be SQL goes in a Go function
+in the same list.
+
+---
+
 ## Before You Start
 
 ### Backup Your Database

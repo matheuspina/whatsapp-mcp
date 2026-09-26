@@ -25,32 +25,43 @@ interface WebhookLogsProps {
   webhookName: string;
 }
 
+/** The parent gives this a `key` per webhook, so the logs start empty for each one. */
 export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: WebhookLogsProps) {
-  const [logs, setLogs] = useState<WebhookLog[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const loadLogs = async () => {
-    if (!webhookId) return;
-
-    setLoading(true);
-    try {
-      const api = new WhatsAppAPI();
-      const data = await api.getWebhookLogs(webhookId);
-      setLogs(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-    } catch (error) {
-      const { title, description } = getErrorMessage(error);
-      toast.error(title, { description });
-      setLogs([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // null until the first load finishes
+  const [logs, setLogs] = useState<WebhookLog[] | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    if (open && webhookId) {
-      loadLogs();
-    }
-  }, [open, webhookId]);
+    if (!open || !webhookId) return;
+    let ignore = false;
+    new WhatsAppAPI()
+      .getWebhookLogs(webhookId)
+      .then((data) => {
+        if (!ignore) {
+          setLogs(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        }
+      })
+      .catch((error: unknown) => {
+        if (ignore) return;
+        const { title, description } = getErrorMessage(error);
+        toast.error(title, { description });
+        setLogs([]);
+      })
+      .finally(() => {
+        if (!ignore) setRefreshing(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [open, webhookId, reload]);
+
+  const loading = open && logs === null;
+  const shown = logs ?? [];
+  const loadLogs = () => {
+    setRefreshing(true);
+    setReload((n) => n + 1);
+  };
 
   const getStatusInfo = (log: WebhookLog) => {
     if (log.response_status) {
@@ -91,22 +102,22 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
               <DialogTitle>Webhook Logs</DialogTitle>
               <DialogDescription>{webhookName}</DialogDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={loadLogs} disabled={loading}>
-              <RefreshCw className={"h-4 w-4 mr-1" + (loading ? " animate-spin" : "")} />
+            <Button variant="outline" size="sm" onClick={loadLogs} disabled={loading || refreshing}>
+              <RefreshCw className={"h-4 w-4 mr-1" + (loading || refreshing ? " animate-spin" : "")} />
               Refresh
             </Button>
           </div>
         </DialogHeader>
 
         <div className="flex items-center justify-between text-sm text-muted-foreground border-b pb-2">
-          <span>{logs.length} log {logs.length === 1 ? "entry" : "entries"}</span>
+          <span>{shown.length} log {shown.length === 1 ? "entry" : "entries"}</span>
         </div>
 
-        {loading && logs.length === 0 ? (
+        {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        ) : logs.length === 0 ? (
+        ) : shown.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <Clock className="h-12 w-12 mb-4" />
             <p>No logs yet</p>
@@ -115,7 +126,7 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
         ) : (
           <ScrollArea className="h-[500px] pr-4">
             <div className="space-y-3">
-              {logs.map((log) => {
+              {shown.map((log) => {
                 const statusInfo = getStatusInfo(log);
                 const StatusIcon = statusInfo.icon;
                 const payload = parsePayload(log.payload);

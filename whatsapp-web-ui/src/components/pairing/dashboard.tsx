@@ -38,11 +38,31 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
     }
   }, []);
 
+  // Polling loop: state is only set from the promise callbacks, never synchronously in the effect body.
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
-  }, [fetchStatus]);
+    let ignore = false;
+    const poll = () => {
+      const api = new WhatsAppAPI();
+      Promise.all([api.getSyncStatus(), api.getConnectionStatus()])
+        .then(([sync, conn]) => {
+          if (ignore) return;
+          setSyncStatus(sync);
+          setConnStatus(conn);
+        })
+        .catch((error: unknown) => {
+          console.error("Failed to fetch status:", error);
+        })
+        .finally(() => {
+          if (!ignore) setLoading(false);
+        });
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleRefresh = () => {
     setLoading(true);

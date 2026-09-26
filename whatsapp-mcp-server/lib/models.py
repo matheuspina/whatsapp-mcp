@@ -119,7 +119,7 @@ class Message:
 
 @dataclass
 class Department:
-    """Represents an organizational department."""
+    """An organizational department: a sector whose numbers and people are monitored together."""
 
     id: int
     name: str
@@ -139,61 +139,64 @@ class Department:
 
 @dataclass
 class Employee:
-    """Represents an employee/staff member."""
+    """A person whose WhatsApp number is monitored."""
 
     id: int
     name: str
     role: str | None = None
+    email: str | None = None
+    active: bool = True
     department_id: int | None = None
     department_name: str | None = None
-    phone_number: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
+    instance_jids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "name": self.name,
             "role": self.role,
+            "email": self.email,
+            "active": self.active,
             "department_id": self.department_id,
             "department_name": self.department_name,
-            "phone_number": self.phone_number,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "instance_jids": self.instance_jids,
         }
 
 
 @dataclass
 class Instance:
-    """Represents a connected WhatsApp instance/device."""
+    """A monitored WhatsApp number and who currently operates it."""
 
-    jid: str
+    id: int
+    phone_jid: str | None
     phone_number: str | None = None
     alias: str | None = None
+    status: str = "disconnected"
     employee_id: int | None = None
     employee_name: str | None = None
+    department_id: int | None = None
     department_name: str | None = None
-    status: str = "disconnected"
-    is_active: bool = False
-    connected_at: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
+    allow_send: bool = False
+    corporate_asset_confirmed: bool = False
+    paired_at: str | None = None
+    last_seen_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "jid": self.jid,
+            "id": self.id,
+            "phone_jid": self.phone_jid,
             "phone_number": self.phone_number,
             "alias": self.alias,
+            "status": self.status,
             "employee_id": self.employee_id,
             "employee_name": self.employee_name,
+            "department_id": self.department_id,
             "department_name": self.department_name,
-            "status": self.status,
-            "is_active": self.is_active,
-            "connected_at": self.connected_at,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "allow_send": self.allow_send,
+            "corporate_asset_confirmed": self.corporate_asset_confirmed,
+            "paired_at": self.paired_at,
+            "last_seen_at": self.last_seen_at,
         }
-
 
 
 @dataclass

@@ -10,6 +10,7 @@ import {
   LogOut,
   MessageSquare,
   Plug,
+  ScrollText,
   Settings,
   Smartphone,
   User,
@@ -64,10 +65,16 @@ const navGroups: NavGroup[] = [
         description: "Métricas gerais do sistema",
       },
       {
-        title: "Mensagens & Auditoria",
+        title: "Mensagens",
         href: "/messages",
         icon: MessageSquare,
-        description: "Feed centralizado e anti-delete",
+        description: "Feed por setor e colaborador",
+      },
+      {
+        title: "Auditoria",
+        href: "/audit",
+        icon: ScrollText,
+        description: "Apagadas, acessos e privacidade",
       },
     ],
   },
@@ -92,7 +99,7 @@ const navGroups: NavGroup[] = [
     label: "Conexões & IA",
     items: [
       {
-        title: "Instâncias WhatsApp",
+        title: "Números WhatsApp",
         href: "/instances",
         icon: Smartphone,
         description: "Dispositivos conectados",
@@ -120,19 +127,23 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
   const pathname = usePathname();
   const { username, setAnon } = useAuth();
   const [connStatus, setConnStatus] = useState<ConnectionDotStatus>("unknown");
+  const [numbers, setNumbers] = useState<{ live: number; total: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const checkStatus = () => {
       new WhatsAppAPI()
-        .getConnectionStatus()
-        .then((status) => {
-          if (!cancelled) {
-            setConnStatus(status.connected ? "connected" : "disconnected");
-          }
+        .getInstances()
+        .then((list) => {
+          if (cancelled) return;
+          const paired = list.filter((i) => i.status !== "pairing");
+          const live = paired.filter((i) => i.live).length;
+          setNumbers({ live, total: paired.length });
+          setConnStatus(live > 0 ? "connected" : "disconnected");
         })
         .catch(() => {
           if (!cancelled) {
+            setNumbers(null);
             setConnStatus("unknown");
           }
         });
@@ -160,11 +171,9 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
     unknown: "bg-warning",
   }[connStatus];
 
-  const statusLabel = {
-    connected: "Connected",
-    disconnected: "Disconnected",
-    unknown: "Checking...",
-  }[connStatus];
+  const statusLabel = numbers
+    ? `${numbers.live} de ${numbers.total} números online`
+    : { connected: "Conectado", disconnected: "Desconectado", unknown: "Verificando..." }[connStatus];
 
   return (
     <SidebarPrimitive collapsible="icon" {...props}>
@@ -185,7 +194,7 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">WhatsApp MCP</span>
-                  <span className="truncate text-xs text-muted-foreground">by Matheus Pina</span>
+                  <span className="truncate text-xs text-muted-foreground">{statusLabel}</span>
                 </div>
               </Link>
             </SidebarMenuButton>

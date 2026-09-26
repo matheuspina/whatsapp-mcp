@@ -3,6 +3,7 @@
 import {
   Smartphone,
   MessageSquare,
+  ScrollText,
   Building2,
   Users,
   Webhook,
@@ -16,28 +17,39 @@ export default function Home() {
     <PageContainer>
       <PageHeader
         title="Central de Mensagens & Governança WhatsApp"
-        description="Gestão de instâncias multi-aparelho, organização por departamentos e contexto para inteligência artificial."
+        description="Números monitorados, organização por setores e colaboradores, auditoria e contexto para inteligência artificial."
       />
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         <FeatureCard
           icon={Smartphone}
-          title="Instâncias WhatsApp"
+          title="Números WhatsApp"
           description="Aparelhos conectados"
           href="/instances"
-          cta="Gerenciar Instâncias"
+          cta="Gerenciar Números"
         >
-          Vincule e monitore múltiplos aparelhos corporativos via QR Code oficial, com operação passiva e baixo risco.
+          Vincule vários aparelhos corporativos por QR Code, defina o responsável de cada um e se ele pode enviar mensagens.
         </FeatureCard>
 
         <FeatureCard
           icon={MessageSquare}
-          title="Mensagens & Auditoria"
-          description="Feed centralizado e anti-delete"
+          title="Mensagens"
+          description="Feed por setor e colaborador"
           href="/messages"
-          cta="Acessar Auditoria"
+          cta="Ver Mensagens"
           variant="outline"
         >
-          Consulte o histórico unificado de conversas com identificação de mensagens apagadas para conformidade legal.
+          Consulte as conversas de todos os números, filtradas por setor, colaborador, número, texto e período.
+        </FeatureCard>
+
+        <FeatureCard
+          icon={ScrollText}
+          title="Auditoria"
+          description="Apagadas, acessos e privacidade"
+          href="/audit"
+          cta="Abrir Auditoria"
+          variant="outline"
+        >
+          Veja mensagens apagadas pelo remetente, quem consultou os dados e atenda pedidos de anonimização (LGPD).
         </FeatureCard>
 
         <FeatureCard

@@ -5,7 +5,8 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
 
-from .models import Chat, Contact, Department, Employee, Instance, Message, MessageContext
+from .access import connect_messages, connect_messages_rw, connect_whatsapp, current_scope
+from .models import Chat, Contact, Employee, Instance, Message, MessageContext
 from .utils import MESSAGES_DB_PATH, WHATSAPP_DB_PATH, get_sender_name, logger
 
 
@@ -72,7 +73,7 @@ def get_contact_info(jid: str) -> dict[str, Any] | None:
         return None
 
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         # Try to get nickname first
@@ -256,7 +257,7 @@ def list_messages(
         DatabaseError: If database query fails.
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         query_parts = [
@@ -427,7 +428,7 @@ def get_message_context(message_id: str, before: int = 5, after: int = 5) -> Mes
         ValueError: If message not found.
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -590,7 +591,7 @@ def list_chats(
         List of chat dictionaries.
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         query_sql = """
@@ -724,7 +725,7 @@ def get_contact_by_jid(jid: str) -> Contact | None:
         Contact object if found, None otherwise.
     """
     try:
-        conn = sqlite3.connect(WHATSAPP_DB_PATH)
+        conn = connect_whatsapp(WHATSAPP_DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -775,7 +776,7 @@ def get_contact_nickname(jid: str) -> str | None:
         Nickname if set, None otherwise.
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -806,7 +807,7 @@ def set_contact_nickname(jid: str, nickname: str) -> dict[str, Any]:
         Result dictionary with success status.
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages_rw(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -841,7 +842,7 @@ def search_contacts(query: str) -> list[dict[str, Any]]:
         List of matching contact dictionaries.
     """
     try:
-        whatsapp_conn = sqlite3.connect(WHATSAPP_DB_PATH)
+        whatsapp_conn = connect_whatsapp(WHATSAPP_DB_PATH)
         whatsapp_cursor = whatsapp_conn.cursor()
 
         # Query WhatsApp contacts
@@ -868,7 +869,7 @@ def search_contacts(query: str) -> list[dict[str, Any]]:
         jids = [row[0] for row in contacts]
 
         # Use messages DB for nicknames (single query with IN clause)
-        messages_conn = sqlite3.connect(MESSAGES_DB_PATH)
+        messages_conn = connect_messages(MESSAGES_DB_PATH)
         messages_cursor = messages_conn.cursor()
 
         # Use parameter placeholders to avoid SQL injection
@@ -915,227 +916,314 @@ def search_contacts(query: str) -> list[dict[str, Any]]:
             messages_conn.close()
 
 
-def list_departments() -> list[dict[str, Any]]:
-    """List all organizational departments.
+# --- organization and audit ------------------------------------------------------------------
+#
+# These read the tables the bridge owns (departments, employees, instances, instance_assignments,
+# message_versions). They follow the caller's scope: a restricted caller only sees the numbers in
+# its scope and the people and departments that held them.
 
-    Returns:
-        List of department dictionaries.
-    """
+
+def _org_query(sql: str, params: tuple | list = ()) -> list[sqlite3.Row]:
+    """Run a read-only query against the organization tables, raising DatabaseError with a hint on failure."""
+    conn = None
     try:
-        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name, description, created_at, updated_at FROM departments ORDER BY name ASC")
-        rows = cursor.fetchall()
-        conn.close()
-        return [
-            Department(
-                id=r[0],
-                name=r[1],
-                description=r[2],
-                created_at=r[3],
-                updated_at=r[4],
-            ).to_dict()
-            for r in rows
-        ]
-    except sqlite3.OperationalError:
-        # Table might not exist yet in unmigrated or mock tests
-        return []
-    except Exception as e:
-        logger.error("Error listing departments: %s", e)
-        raise DatabaseError(f"Failed to list departments: {e}") from e
+        conn = connect_messages(MESSAGES_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn.execute(sql, params).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc) or "no such column" in str(exc):
+            raise DatabaseError(
+                f"The organization tables are missing or outdated ({exc}). Start the bridge once so it applies its "
+                "database migrations, then try again."
+            ) from exc
+        raise DatabaseError(f"Database error: {exc}") from exc
+    except sqlite3.Error as exc:
+        raise DatabaseError(f"Database error: {exc}") from exc
+    finally:
+        if conn is not None:
+            conn.close()
 
 
-def list_employees(department_id: int | None = None, query: str | None = None) -> list[dict[str, Any]]:
-    """List employees, optionally filtered by department or search query.
+def _scope_clause(kind: str) -> str:
+    """SQL that limits organization rows to the caller's scope ("" when unrestricted)."""
+    if not current_scope().restricted:
+        return ""
+    held = """
+        SELECT 1 FROM temp._scope_windows w
+        JOIN instances si ON si.phone_jid = w.instance_jid
+        JOIN instance_assignments sa ON sa.instance_id = si.id
+        JOIN employees se ON se.id = sa.employee_id
+        WHERE {condition}
+    """
+    if kind == "department":
+        return "EXISTS (" + held.format(condition="se.department_id = d.id") + ")"
+    if kind == "employee":
+        return "EXISTS (" + held.format(condition="se.id = e.id") + ")"
+    if kind == "instance":
+        return "i.phone_jid IN (SELECT instance_jid FROM temp._scope_windows)"
+    raise ValueError(kind)
+
+
+def _where(*clauses: str) -> str:
+    kept = [c for c in clauses if c]
+    return " WHERE " + " AND ".join(kept) if kept else ""
+
+
+def list_departments() -> list[dict[str, Any]]:
+    """List departments (sectors), the semantic context of the numbers and people in them."""
+    rows = _org_query(
+        "SELECT d.id, d.name, d.description, d.created_at, d.updated_at FROM departments d"
+        + _where(_scope_clause("department"))
+        + " ORDER BY d.name ASC"
+    )
+    return [dict(r) for r in rows]
+
+
+_EMPLOYEE_SELECT = """
+    SELECT e.id, e.name, e.role, e.email, e.active, e.department_id, d.name AS department_name,
+           (SELECT group_concat(i.phone_jid) FROM instances i
+             WHERE i.employee_id = e.id AND i.phone_jid IS NOT NULL AND COALESCE(i.status, '') != 'removed') AS instance_jids
+    FROM employees e
+    LEFT JOIN departments d ON d.id = e.department_id
+"""
+
+
+def _employee(row: sqlite3.Row) -> dict[str, Any]:
+    return Employee(
+        id=row["id"],
+        name=row["name"],
+        role=row["role"],
+        email=row["email"],
+        active=bool(row["active"]),
+        department_id=row["department_id"],
+        department_name=row["department_name"],
+        instance_jids=[j for j in (row["instance_jids"] or "").split(",") if j],
+    ).to_dict()
+
+
+def list_employees(
+    department_id: int | None = None, query: str | None = None, include_inactive: bool = False
+) -> list[dict[str, Any]]:
+    """List employees with their department and the numbers they operate now.
 
     Args:
-        department_id: Optional department ID to filter by.
-        query: Optional name or role query.
-
-    Returns:
-        List of employee dictionaries.
+        department_id: Only this department.
+        query: Part of a name or role.
+        include_inactive: Also list people marked inactive.
     """
-    try:
-        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
-        cursor = conn.cursor()
-        sql = """
-            SELECT e.id, e.name, e.role, e.department_id, d.name AS department_name, e.phone_number, e.created_at, e.updated_at
-            FROM employees e
-            LEFT JOIN departments d ON e.department_id = d.id
-        """
-        clauses = []
-        params = []
-        if department_id is not None:
-            clauses.append("e.department_id = ?")
-            params.append(department_id)
-        if query:
-            clauses.append("(LOWER(e.name) LIKE LOWER(?) OR LOWER(e.role) LIKE LOWER(?))")
-            params.extend([f"%{query}%", f"%{query}%"])
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY e.name ASC"
-
-        cursor.execute(sql, tuple(params))
-        rows = cursor.fetchall()
-        conn.close()
-        return [
-            Employee(
-                id=r[0],
-                name=r[1],
-                role=r[2],
-                department_id=r[3],
-                department_name=r[4],
-                phone_number=r[5],
-                created_at=r[6],
-                updated_at=r[7],
-            ).to_dict()
-            for r in rows
-        ]
-    except sqlite3.OperationalError:
-        return []
-    except Exception as e:
-        logger.error("Error listing employees: %s", e)
-        raise DatabaseError(f"Failed to list employees: {e}") from e
+    clauses: list[str] = [_scope_clause("employee")]
+    params: list[Any] = []
+    if department_id is not None:
+        clauses.append("e.department_id = ?")
+        params.append(department_id)
+    if query:
+        clauses.append("(LOWER(e.name) LIKE ? OR LOWER(COALESCE(e.role, '')) LIKE ?)")
+        params += [f"%{query.lower()}%"] * 2
+    if not include_inactive:
+        clauses.append("e.active = 1")
+    return [_employee(r) for r in _org_query(_EMPLOYEE_SELECT + _where(*clauses) + " ORDER BY e.name ASC", params)]
 
 
 def resolve_employee(name_or_query: str) -> dict[str, Any]:
-    """Resolve an employee by name or role to assist AI in finding team members.
-
-    Args:
-        name_or_query: Name or role search string.
+    """Find who a name refers to. Several matches are returned as candidates, never guessed between.
 
     Returns:
-        Dict with search results and matched employees.
+        found, ambiguous (more than one plausible person: ask which one) and the matching employees.
     """
+    needle = name_or_query.strip().lower()
+    if not needle:
+        raise DatabaseError("query must not be empty")
+    rows = _org_query(
+        _EMPLOYEE_SELECT
+        + _where(
+            _scope_clause("employee"),
+            "e.active = 1",
+            "(LOWER(e.name) LIKE ? OR LOWER(COALESCE(e.role, '')) LIKE ?)",
+        )
+        + " ORDER BY CASE WHEN LOWER(e.name) = ? THEN 0 ELSE 1 END, e.name ASC LIMIT 10",
+        [f"%{needle}%", f"%{needle}%", needle],
+    )
+    employees = [_employee(r) for r in rows]
+    exact = [e for e in employees if e["name"].lower() == needle]
+    return {
+        "query": name_or_query,
+        "found": bool(employees),
+        "ambiguous": len(employees) > 1 and len(exact) != 1,
+        "employees": exact if len(exact) == 1 else employees,
+    }
+
+
+_INSTANCE_SELECT = """
+    SELECT i.id, i.phone_jid, i.alias, i.status, i.employee_id, e.name AS employee_name, e.department_id,
+           d.name AS department_name, i.allow_send, i.corporate_asset_confirmed, i.paired_at, i.last_seen_at
+    FROM instances i
+    LEFT JOIN employees e ON e.id = i.employee_id
+    LEFT JOIN departments d ON d.id = e.department_id
+"""
+
+
+def list_instances(include_removed: bool = False) -> list[dict[str, Any]]:
+    """List the monitored WhatsApp numbers, who operates each and whether it may send."""
+    clauses = [_scope_clause("instance")]
+    if not include_removed:
+        clauses.append("COALESCE(i.status, '') != 'removed'")
+    rows = _org_query(_INSTANCE_SELECT + _where(*clauses) + " ORDER BY i.created_at ASC, i.id ASC")
+    return [
+        Instance(
+            id=r["id"],
+            phone_jid=r["phone_jid"],
+            phone_number=(r["phone_jid"] or "").split("@")[0] or None,
+            alias=r["alias"],
+            status=r["status"] or "disconnected",
+            employee_id=r["employee_id"],
+            employee_name=r["employee_name"],
+            department_id=r["department_id"],
+            department_name=r["department_name"],
+            allow_send=bool(r["allow_send"]),
+            corporate_asset_confirmed=bool(r["corporate_asset_confirmed"]),
+            paired_at=r["paired_at"],
+            last_seen_at=r["last_seen_at"],
+        ).to_dict()
+        for r in rows
+    ]
+
+
+# Who held the number when a message was exchanged, from the assignment history.
+_ATTRIBUTION_JOIN = """
+    LEFT JOIN instances i ON i.phone_jid = m.instance_jid
+    LEFT JOIN instance_assignments a ON a.instance_id = i.id
+        AND datetime(m.timestamp) >= datetime(a.valid_from)
+        AND (a.valid_to IS NULL OR datetime(m.timestamp) < datetime(a.valid_to))
+    LEFT JOIN employees e ON e.id = a.employee_id
+    LEFT JOIN departments d ON d.id = e.department_id
+    LEFT JOIN chats c ON c.jid = m.chat_jid
+"""
+
+_AUDIT_COLUMNS = """
+    m.id, m.chat_jid, c.name AS chat_name, m.instance_jid, i.alias AS instance_alias,
+    a.employee_id, e.name AS employee_name, e.department_id, d.name AS department_name,
+    m.sender, m.sender_name, m.content, m.timestamp, m.is_from_me, m.media_type,
+    COALESCE(m.is_edited, 0) AS is_edited, COALESCE(m.is_deleted_remote, 0) AS is_deleted_remote,
+    m.deleted_at, m.deleted_by
+"""
+
+
+def _audit_rows(
+    chat_jid: str | None,
+    instance_jid: str | None,
+    employee_id: int | None,
+    department_id: int | None,
+    deleted_only: bool,
+    since: str | None,
+    until: str | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if chat_jid:
+        clauses.append("m.chat_jid = ?")
+        params.append(chat_jid)
+    if instance_jid:
+        clauses.append("m.instance_jid = ?")
+        params.append(instance_jid)
+    if employee_id is not None:
+        clauses.append("a.employee_id = ?")
+        params.append(employee_id)
+    if department_id is not None:
+        clauses.append("e.department_id = ?")
+        params.append(department_id)
+    if deleted_only:
+        clauses.append("m.is_deleted_remote = 1")
+    if since:
+        clauses.append("datetime(m.timestamp) >= datetime(?)")
+        params.append(since)
+    if until:
+        clauses.append("datetime(m.timestamp) < datetime(?)")
+        params.append(until)
+    limit = max(1, min(int(limit), 500))
+
+    rows = _org_query(
+        f"SELECT {_AUDIT_COLUMNS} FROM messages_all m {_ATTRIBUTION_JOIN}{_where(*clauses)} "
+        "ORDER BY m.timestamp DESC, m.id DESC LIMIT ?",
+        [*params, limit],
+    )
+    results = [dict(r) for r in rows]
+    for r in results:
+        r["is_from_me"] = bool(r["is_from_me"])
+        r["is_edited"] = bool(r["is_edited"])
+        r["is_deleted_remote"] = bool(r["is_deleted_remote"])
+    return results
+
+
+def _attach_versions(messages: list[dict[str, Any]]) -> None:
+    """Add "versions" (earlier texts) to the messages that were edited or revoked."""
+    flagged = [m for m in messages if m["is_edited"] or m["is_deleted_remote"]]
+    if not flagged:
+        return
+    conn = None
     try:
-        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
-        cursor = conn.cursor()
-        sql = """
-            SELECT e.id, e.name, e.role, e.department_id, d.name AS department_name, e.phone_number
-            FROM employees e
-            LEFT JOIN departments d ON e.department_id = d.id
-            WHERE LOWER(e.name) LIKE LOWER(?) OR LOWER(e.role) LIKE LOWER(?)
-            ORDER BY CASE WHEN LOWER(e.name) = LOWER(?) THEN 0 ELSE 1 END, e.name ASC
-            LIMIT 5
-        """
-        p = f"%{name_or_query}%"
-        cursor.execute(sql, (p, p, name_or_query))
-        rows = cursor.fetchall()
-        conn.close()
-
-        employees = [
-            {
-                "id": r[0],
-                "name": r[1],
-                "role": r[2],
-                "department_id": r[3],
-                "department_name": r[4],
-                "phone_number": r[5],
-            }
-            for r in rows
-        ]
-        return {
-            "query": name_or_query,
-            "found": len(employees) > 0,
-            "employees": employees,
-        }
-    except sqlite3.OperationalError:
-        return {"query": name_or_query, "found": False, "employees": []}
-    except Exception as e:
-        logger.error("Error resolving employee: %s", e)
-        raise DatabaseError(f"Failed to resolve employee: {e}") from e
+        conn = connect_messages(MESSAGES_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        for m in flagged:
+            rows = conn.execute(
+                "SELECT content, reason, recorded_at FROM message_versions "
+                "WHERE instance_jid = ? AND chat_jid = ? AND message_id = ? ORDER BY recorded_at, id",
+                (m["instance_jid"], m["chat_jid"], m["id"]),
+            ).fetchall()
+            m["versions"] = [dict(r) for r in rows]
+    except sqlite3.Error as exc:
+        raise DatabaseError(f"Database error: {exc}") from exc
+    finally:
+        if conn is not None:
+            conn.close()
 
 
-def list_instances() -> list[dict[str, Any]]:
-    """List all connected WhatsApp instances and their linked employees.
+def get_audit_deleted_messages(
+    chat_jid: str | None = None,
+    limit: int = 50,
+    instance_jid: str | None = None,
+    employee_id: int | None = None,
+    department_id: int | None = None,
+) -> list[dict[str, Any]]:
+    """Messages their sender revoked on WhatsApp, with the text that was revoked and who held the number."""
+    messages = _audit_rows(chat_jid, instance_jid, employee_id, department_id, True, None, None, limit)
+    _attach_versions(messages)
+    return messages
 
-    Returns:
-        List of instance dictionaries.
+
+def get_audit_trail(
+    chat_jid: str | None = None,
+    employee_id: int | None = None,
+    instance_jid: str | None = None,
+    department_id: int | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """The audit trail of a conversation or of a person's numbers.
+
+    Every stored copy of each message (one per number that captured it) with who held the number at
+    that moment, edited and revoked messages with their earlier texts, newest first.
     """
-    try:
-        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
-        cursor = conn.cursor()
-        sql = """
-            SELECT i.jid, i.phone_number, i.alias, i.employee_id, e.name AS employee_name, d.name AS department_name,
-                   i.status, i.is_active, i.connected_at, i.created_at, i.updated_at
-            FROM instances i
-            LEFT JOIN employees e ON i.employee_id = e.id
-            LEFT JOIN departments d ON e.department_id = d.id
-            ORDER BY i.created_at DESC
-        """
-        cursor.execute(sql)
-        rows = cursor.fetchall()
-        conn.close()
-        return [
-            Instance(
-                jid=r[0],
-                phone_number=r[1],
-                alias=r[2],
-                employee_id=r[3],
-                employee_name=r[4],
-                department_name=r[5],
-                status=r[6] or "disconnected",
-                is_active=bool(r[7]),
-                connected_at=r[8],
-                created_at=r[9],
-                updated_at=r[10],
-            ).to_dict()
-            for r in rows
-        ]
-    except sqlite3.OperationalError:
-        return []
-    except Exception as e:
-        logger.error("Error listing instances: %s", e)
-        raise DatabaseError(f"Failed to list instances: {e}") from e
+    if not any([chat_jid, employee_id is not None, instance_jid, department_id is not None]):
+        raise DatabaseError("Give at least one of chat_jid, employee_id, instance_jid or department_id.")
+    messages = _audit_rows(chat_jid, instance_jid, employee_id, department_id, False, since, until, limit)
+    _attach_versions(messages)
+    return {
+        "count": len(messages),
+        "edited": sum(1 for m in messages if m["is_edited"]),
+        "deleted": sum(1 for m in messages if m["is_deleted_remote"]),
+        "messages": messages,
+    }
 
 
-def get_audit_deleted_messages(chat_jid: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
-    """Get audit logs of messages that were remotely deleted on WhatsApp.
-
-    Args:
-        chat_jid: Optional chat JID to filter by.
-        limit: Max number of messages to return.
-
-    Returns:
-        List of deleted message audit records.
-    """
-    try:
-        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
-        cursor = conn.cursor()
-        sql = """
-            SELECT m.id, m.chat_jid, c.name AS chat_name, m.sender, m.content, m.timestamp,
-                   m.is_from_me, m.instance_jid, m.is_deleted_remote
-            FROM messages m
-            LEFT JOIN chats c ON m.chat_jid = c.jid
-            WHERE m.is_deleted_remote = 1
-        """
-        params = []
-        if chat_jid:
-            sql += " AND m.chat_jid = ?"
-            params.append(chat_jid)
-        sql += " ORDER BY m.timestamp DESC LIMIT ?"
-        params.append(limit)
-
-        cursor.execute(sql, tuple(params))
-        rows = cursor.fetchall()
-        conn.close()
-        return [
-            {
-                "id": r[0],
-                "chat_jid": r[1],
-                "chat_name": r[2],
-                "sender": r[3],
-                "content": r[4],
-                "timestamp": r[5],
-                "is_from_me": bool(r[6]),
-                "instance_jid": r[7],
-                "is_deleted_remote": bool(r[8]),
-            }
-            for r in rows
-        ]
-    except sqlite3.OperationalError:
-        return []
-    except Exception as e:
-        logger.error("Error retrieving deleted messages audit: %s", e)
-        raise DatabaseError(f"Failed to retrieve deleted messages audit: {e}") from e
-
+def list_access_log(limit: int = 100) -> list[dict[str, Any]]:
+    """Who queried message data through the MCP server or the panel, newest first. Unrestricted callers only."""
+    if current_scope().restricted:
+        raise DatabaseError("The access log is only available to unrestricted clients.")
+    rows = _org_query(
+        "SELECT id, ts, actor, client_id, action, resource, params, result_count FROM access_log "
+        "ORDER BY id DESC LIMIT ?",
+        [max(1, min(int(limit), 500))],
+    )
+    return [dict(r) for r in rows]

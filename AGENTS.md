@@ -27,8 +27,10 @@ See [docs/architecture.md](docs/architecture.md).
 
 4. **Database and state.**
    - SQLite access to `messages.db` and `whatsapp.db` uses WAL mode and proper transactions. Do not modify `whatsapp.db`, which belongs to whatsmeow.
+   - In Go, writes to `messages.db` go through the writer queue (`enqueueWrite`). In Python, read through `connect_messages` / `connect_whatsapp` (`lib/access.py`) so the caller's access scope applies; do not open the databases with `sqlite3.connect`.
+   - A message belongs to a number: key by `(instance_jid, chat_jid, id)`, and attribute people through `instance_assignments`, never through the number's current owner alone.
    - Never break LID to phone JID resolution (`<id>@lid` to phone JID).
-   - Schema changes ship as idempotent, append-only migrations (see [docs/migrations.md](docs/migrations.md)).
+   - Schema changes ship as idempotent, append-only migrations registered in `internal/database/migrate.go` (see [docs/migrations.md](docs/migrations.md)); test them against a legacy database.
 
 5. **Optional dependencies** must be imported lazily and fail with a structured error (`{success: false, message: ...}`), so the default install keeps working.
 

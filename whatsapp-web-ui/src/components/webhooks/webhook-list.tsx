@@ -31,12 +31,13 @@ export function WebhookList() {
   const [deleteDialog, setDeleteDialog] = useState<{ id: string; name: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Bumped every time the form dialog opens, so the form remounts with fresh state.
+  const [formKey, setFormKey] = useState(0);
+
   const loadWebhooks = async () => {
-    setLoading(true);
     try {
       const api = new WhatsAppAPI();
-      const data = await api.getWebhooks();
-      setWebhooks(data);
+      setWebhooks(await api.getWebhooks());
     } catch (error) {
       const { title, description } = getErrorMessage(error);
       toast.error(title, { description });
@@ -47,16 +48,35 @@ export function WebhookList() {
   };
 
   useEffect(() => {
-    loadWebhooks();
+    let ignore = false;
+    new WhatsAppAPI()
+      .getWebhooks()
+      .then((data) => {
+        if (!ignore) setWebhooks(data);
+      })
+      .catch((error: unknown) => {
+        if (ignore) return;
+        const { title, description } = getErrorMessage(error);
+        toast.error(title, { description });
+        setWebhooks([]);
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleCreate = () => {
     setEditingWebhook(null);
+    setFormKey((k) => k + 1);
     setFormOpen(true);
   };
 
   const handleEdit = (webhook: Webhook) => {
     setEditingWebhook(webhook);
+    setFormKey((k) => k + 1);
     setFormOpen(true);
   };
 
@@ -175,6 +195,7 @@ export function WebhookList() {
       )}
 
       <WebhookForm
+        key={formKey}
         open={formOpen}
         onOpenChange={setFormOpen}
         webhook={editingWebhook}
@@ -183,6 +204,7 @@ export function WebhookList() {
       />
 
       <WebhookLogs
+        key={logsWebhook?.id ?? "none"}
         open={logsOpen}
         onOpenChange={setLogsOpen}
         webhookId={logsWebhook?.id || null}
@@ -194,7 +216,7 @@ export function WebhookList() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Webhook</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deleteDialog?.name}"? This will also delete all webhook logs and cannot be undone.
+              Are you sure you want to delete &quot;{deleteDialog?.name}&quot;? This will also delete all webhook logs and cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

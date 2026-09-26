@@ -462,7 +462,8 @@ func watchConnections(mgr *whatsapp.InstanceManager, logger waLog.Logger) {
 				allDown = false
 				continue
 			}
-			if watched > 1 || len(paired) > 1 {
+			if len(paired) > 1 {
+				// Other numbers are still up, so this one gets another try instead of a restart.
 				logger.Warnf("WATCHDOG: %s offline for %v, reconnecting", c.InstanceJID(), time.Since(discAt).Round(time.Second))
 				go func(c *whatsapp.Client) {
 					if err := c.Client.Connect(); err != nil {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Webhook, WebhookTrigger } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,36 +39,26 @@ const defaultTrigger: WebhookTrigger = {
   enabled: true,
 };
 
-export function WebhookForm({ open, onOpenChange, webhook, onSubmit, isLoading }: WebhookFormProps) {
-  const [formData, setFormData] = useState<WebhookFormData>({
-    name: "",
-    webhook_url: "",
-    secret_token: "",
-    enabled: true,
-    triggers: [defaultTrigger],
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+function initialFormData(webhook?: Webhook | null): WebhookFormData {
+  if (webhook) {
+    return {
+      name: webhook.name,
+      webhook_url: webhook.webhook_url,
+      secret_token: webhook.secret_token || "",
+      enabled: webhook.enabled,
+      triggers: webhook.triggers?.length ? webhook.triggers : [defaultTrigger],
+    };
+  }
+  return { name: "", webhook_url: "", secret_token: "", enabled: true, triggers: [defaultTrigger] };
+}
 
-  useEffect(() => {
-    if (webhook) {
-      setFormData({
-        name: webhook.name,
-        webhook_url: webhook.webhook_url,
-        secret_token: webhook.secret_token || "",
-        enabled: webhook.enabled,
-        triggers: webhook.triggers?.length ? webhook.triggers : [defaultTrigger],
-      });
-    } else {
-      setFormData({
-        name: "",
-        webhook_url: "",
-        secret_token: "",
-        enabled: true,
-        triggers: [defaultTrigger],
-      });
-    }
-    setErrors({});
-  }, [webhook, open]);
+/**
+ * The form starts from `webhook` when it mounts. The parent gives it a new `key` each time the dialog is
+ * opened, so a cancelled edit never leaks into the next one.
+ */
+export function WebhookForm({ open, onOpenChange, webhook, onSubmit, isLoading }: WebhookFormProps) {
+  const [formData, setFormData] = useState<WebhookFormData>(() => initialFormData(webhook));
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};

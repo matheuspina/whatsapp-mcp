@@ -71,9 +71,33 @@ CREATE TABLE IF NOT EXISTS messages (
 ```
 
 **Notes:**
-- Composite primary key allows same message ID across different chats
+- This is the schema of a fresh install *before* the numbered migrations. See "Multi-number schema" below for what
+  the bridge adds on top of it at startup.
 - Media files are NOT stored locally, only references (URL + decryption key)
-- No indexes beyond primary key (performance issue for large datasets)
+
+#### Multi-number schema (migrations 002 to 004)
+
+The bridge upgrades the tables above at startup (see [migrations.md](migrations.md)):
+
+- `messages` gains `instance_jid` (the number that captured it; `''` for messages from before numbers existed),
+  `is_deleted_remote`, `deleted_at`, `deleted_by`, and its primary key becomes `(instance_jid, chat_jid, id)`. The same
+  message seen by two numbers is two rows. The view `messages_unique` shows each `(chat_jid, id)` once.
+- `chats` stays one row per chat JID. `chat_instances(instance_jid, chat_jid, last_message_time)` says which numbers
+  take part in each chat.
+- `departments(id, name, description)`, `employees(id, department_id, name, role, email, active)`.
+- `instances(id, phone_jid, employee_id, alias, status, paired_at, last_seen_at, allow_send, corporate_*)`.
+  `phone_jid` is `NULL` while a number is pairing. Status values: `pairing`, `connected`, `disconnected`, `logged_out`,
+  `removed`.
+- `instance_assignments(instance_id, employee_id, valid_from, valid_to)`: who held a number and when.
+  `valid_to IS NULL` is the current holder.
+- `message_versions(instance_jid, chat_jid, message_id, content, reason)`: earlier texts of edited (`edit`) or revoked
+  (`delete`) messages.
+- `access_log` and `privacy_log`: see [governance.md](governance.md).
+- `schema_migrations(version, applied_at)`.
+
+Writes to `messages.db` go through one writer goroutine that commits many changes in one transaction; each change runs
+under its own savepoint so a failing one does not discard the others. Real-time writes are served before history-sync
+writes, which do not make the caller wait.
 
 #### Table: `contact_nicknames`
 User-defined custom nicknames that override WhatsApp contact names.

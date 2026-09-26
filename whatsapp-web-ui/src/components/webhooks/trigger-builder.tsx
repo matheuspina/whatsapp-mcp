@@ -21,6 +21,7 @@ interface TriggerBuilderProps {
 const triggerTypes = [
   { value: "all", label: "All Messages" },
   { value: "chat_jid", label: "Specific Chat" },
+  { value: "instance_jid", label: "Specific Number" },
   { value: "sender", label: "Specific Sender" },
   { value: "keyword", label: "Keyword" },
   { value: "media_type", label: "Media Type" },

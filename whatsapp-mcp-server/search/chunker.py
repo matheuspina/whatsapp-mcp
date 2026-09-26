@@ -25,13 +25,21 @@ def _format_line(message: ChunkMessage) -> str:
     return f"{utc_time_str(message.ts)} {message.sender_name}: {message.text}"
 
 
-def _chunk_id(chat_jid: str, anchor_message_id: str) -> str:
-    digest = hashlib.sha1(f"{chat_jid}:{anchor_message_id}".encode()).hexdigest()
-    return digest[:16]
+def _chunk_id(chat_jid: str, anchor_message_id: str, instance_jid: str = "") -> str:
+    # The number is part of the identity: two numbers talking to the same customer have two
+    # different conversations, even though the chat JID is the same.
+    key = f"{instance_jid}|{chat_jid}:{anchor_message_id}" if instance_jid else f"{chat_jid}:{anchor_message_id}"
+    return hashlib.sha1(key.encode()).hexdigest()[:16]
 
 
 def _make_chunk(
-    full: list[ChunkMessage], primary: list[ChunkMessage], anchor: str, chat_jid: str, chat_name: str, is_group: bool
+    full: list[ChunkMessage],
+    primary: list[ChunkMessage],
+    anchor: str,
+    chat_jid: str,
+    chat_name: str,
+    is_group: bool,
+    instance_jid: str = "",
 ) -> Chunk:
     start_ts = full[0].ts
     end_ts = full[-1].ts
@@ -39,7 +47,8 @@ def _make_chunk(
     header = f"[{chat_name} | {kind}] {utc_date_str(start_ts)}"
     body = "\n".join(_format_line(m) for m in full)
     return Chunk(
-        chunk_id=_chunk_id(chat_jid, anchor),
+        chunk_id=_chunk_id(chat_jid, anchor, instance_jid),
+        instance_jid=instance_jid,
         chat_jid=chat_jid,
         chat_name=chat_name,
         is_group=is_group,
@@ -58,8 +67,9 @@ def build_chunks(
     chat_name: str,
     is_group: bool,
     cfg: ChunkConfig = ChunkConfig(),
+    instance_jid: str = "",
 ) -> list[Chunk]:
-    """Chunk an ordered set of messages for one chat.
+    """Chunk an ordered set of messages for one chat, as seen by one number.
 
     A new window starts when the silence since the last message exceeds
     ``gap_minutes``, or the window would exceed ``max_messages`` or
@@ -83,7 +93,7 @@ def build_chunks(
         if not window:
             return
         full = overlap + window
-        chunks.append(_make_chunk(full, window, anchor, chat_jid, chat_name, is_group))
+        chunks.append(_make_chunk(full, window, anchor, chat_jid, chat_name, is_group, instance_jid))
         overlap = full[-cfg.overlap :] if cfg.overlap > 0 else []
 
     for msg in ordered:
@@ -115,6 +125,7 @@ def rebuild_chat_region(
     min_ts: int,
     max_ts: int,
     cfg: ChunkConfig = ChunkConfig(),
+    instance_jid: str = "",
 ) -> list[Chunk]:
     """Recompute chunks for the region of a chat touched by new/changed messages.
 
@@ -126,7 +137,7 @@ def rebuild_chat_region(
       [min_ts, max_ts]; chunks further away are left untouched.
     """
     gap_seconds = cfg.gap_minutes * 60
-    touching = store.get_chunks_touching(chat_jid, min_ts - gap_seconds, max_ts + gap_seconds)
+    touching = store.get_chunks_touching(chat_jid, min_ts - gap_seconds, max_ts + gap_seconds, instance_jid)
 
     region_start = min_ts
     region_end = max_ts
@@ -134,7 +145,7 @@ def rebuild_chat_region(
         region_start = min(region_start, chunk.start_ts)
         region_end = max(region_end, chunk.end_ts)
 
-    region_messages = store.get_messages_in_range(chat_jid, region_start, region_end)
-    new_chunks = build_chunks(region_messages, chat_jid, chat_name, is_group, cfg)
-    store.replace_chunks(chat_jid, [c.chunk_id for c in touching], new_chunks)
+    region_messages = store.get_messages_in_range(chat_jid, region_start, region_end, instance_jid)
+    new_chunks = build_chunks(region_messages, chat_jid, chat_name, is_group, cfg, instance_jid)
+    store.replace_chunks(chat_jid, [c.chunk_id for c in touching], new_chunks, instance_jid)
     return new_chunks

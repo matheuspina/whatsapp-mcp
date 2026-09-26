@@ -47,7 +47,7 @@ export interface SyncStatusResponse {
 
 // Webhook types
 export interface WebhookTrigger {
-  trigger_type: "all" | "chat_jid" | "sender" | "keyword" | "media_type";
+  trigger_type: "all" | "chat_jid" | "instance_jid" | "sender" | "keyword" | "media_type";
   trigger_value: string;
   match_type: "exact" | "contains" | "regex";
   enabled: boolean;
@@ -110,32 +110,68 @@ export interface Employee {
   id: number;
   name: string;
   role: string;
+  email?: string;
+  active: boolean;
   department_id?: number | null;
   department_name?: string | null;
-  phone_number: string;
   created_at: string;
   updated_at: string;
 }
 
+export type InstanceStatus = "pairing" | "connected" | "disconnected" | "logged_out" | "removed";
+
+/** A monitored WhatsApp number. `status` is what the bridge last recorded; `live` is its connection right now. */
 export interface Instance {
-  jid: string;
-  phone_number: string;
-  alias: string;
+  id: number;
+  phone_jid?: string;
+  phone_number?: string;
+  alias?: string;
+  status: InstanceStatus;
+  live: boolean;
   employee_id?: number | null;
-  employee_name?: string | null;
-  status: "connected" | "disconnected" | "pairing" | "error";
-  is_active: boolean;
-  connected_at?: string | null;
+  employee_name?: string;
+  department_id?: number | null;
+  department_name?: string;
+  allow_send: boolean;
+  corporate_asset_confirmed: boolean;
+  corporate_terms_version?: string;
+  corporate_confirmed_by?: string;
+  corporate_confirmed_at?: string;
+  paired_at?: string;
+  last_seen_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface InstancePairRequest {
+  alias: string;
+  employee_id?: number | null;
+  allow_send: boolean;
+  corporate_asset_confirmed: boolean;
 }
 
 export interface InstancePairResponse {
   success: boolean;
-  temp_id?: string;
+  instance?: Instance;
   qr_code?: string;
   message?: string;
   error?: string;
+}
+
+export type PairingState = "pending" | "paired" | "expired";
+
+export interface InstanceQRResponse {
+  success: boolean;
+  status: PairingState;
+  qr_code?: string;
+  instance?: Instance;
+}
+
+export interface InstanceUpdate {
+  alias?: string;
+  employee_id?: number | null;
+  allow_send?: boolean;
+  corporate_asset_confirmed?: boolean;
 }
 
 export interface ChatItem {
@@ -144,7 +180,6 @@ export interface ChatItem {
   last_message_time: string;
   is_group: boolean;
   unread_count?: number;
-  instance_jid?: string;
 }
 
 export interface MessageItem {
@@ -158,6 +193,70 @@ export interface MessageItem {
   media_type?: string;
   instance_jid?: string;
   is_deleted_remote?: boolean;
+  is_edited?: boolean;
+}
+
+/** A captured message with the number, person and department that held it when it was exchanged. */
+export interface FeedMessage {
+  id: string;
+  chat_jid: string;
+  chat_name?: string;
+  sender: string;
+  sender_name?: string;
+  content: string;
+  timestamp: string;
+  is_from_me: boolean;
+  media_type?: string;
+  instance_jid?: string;
+  instance_alias?: string;
+  employee_id?: number;
+  employee_name?: string;
+  department_id?: number;
+  department_name?: string;
+  is_edited?: boolean;
+  is_deleted_remote: boolean;
+  deleted_at?: string;
+  deleted_by?: string;
+}
+
+export interface FeedFilters {
+  instance?: string;
+  employee_id?: number;
+  department_id?: number;
+  chat_jid?: string;
+  q?: string;
+  deleted_only?: boolean;
+  since?: string;
+  until?: string;
+  before?: string;
+  limit?: number;
+}
+
+export interface MessageVersion {
+  id: number;
+  content: string;
+  reason: "edit" | "delete";
+  recorded_at: string;
+}
+
+export interface AccessLogEntry {
+  id: number;
+  ts: string;
+  actor?: string;
+  client_id?: string;
+  action: string;
+  resource?: string;
+  params?: string;
+  result_count?: number;
+}
+
+export interface PrivacyLogEntry {
+  id: number;
+  ts: string;
+  actor?: string;
+  action: string;
+  subject?: string;
+  details?: string;
 }
 
 // Fired when the bridge rejects a request because the session is missing or expired.
@@ -353,7 +452,7 @@ export class WhatsAppAPI {
     return res.employees || [];
   }
 
-  async createEmployee(data: { name: string; role?: string; department_id?: number | null; phone_number?: string }): Promise<Employee> {
+  async createEmployee(data: { name: string; role?: string; email?: string; department_id?: number | null }): Promise<Employee> {
     const res = await this.request<{ success: boolean; employee: Employee }>("/employees", {
       method: "POST",
       body: JSON.stringify(data),
@@ -361,7 +460,11 @@ export class WhatsAppAPI {
     return res.employee;
   }
 
-  async updateEmployee(id: number, data: { name?: string; role?: string; department_id?: number | null; phone_number?: string }): Promise<Employee> {
+  /** Partial update: only the fields given change. `department_id: null` removes the department. */
+  async updateEmployee(
+    id: number,
+    data: { name?: string; role?: string; email?: string; active?: boolean; department_id?: number | null }
+  ): Promise<Employee> {
     const res = await this.request<{ success: boolean; employee: Employee }>(`/employees/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -374,33 +477,52 @@ export class WhatsAppAPI {
   }
 
   // Multi-Instance methods
-  async getInstances(): Promise<Instance[]> {
-    const res = await this.request<{ success: boolean; instances?: Instance[] }>("/instances");
+  async getInstances(includeRemoved = false): Promise<Instance[]> {
+    const res = await this.request<{ success: boolean; instances?: Instance[] }>(
+      `/instances${includeRemoved ? "?include_removed=true" : ""}`
+    );
     return res.instances || [];
   }
 
-  async createInstancePair(alias: string, employeeId?: number | null): Promise<InstancePairResponse> {
-    return this.request<InstancePairResponse>("/instances/pair", {
+  /** Starts pairing a new number. The response carries the instance (status "pairing") and the first QR code. */
+  async pairInstance(data: InstancePairRequest): Promise<InstancePairResponse> {
+    return this.request<InstancePairResponse>("/instances", {
       method: "POST",
-      body: JSON.stringify({ alias, employee_id: employeeId }),
+      body: JSON.stringify(data),
     });
   }
 
-  async reconnectInstance(jid: string): Promise<void> {
-    await this.request(`/instances/${encodeURIComponent(jid)}/reconnect`, { method: "POST" });
+  /** The current QR code of a pairing (WhatsApp rotates it every ~20 seconds) and whether it finished. */
+  async getInstanceQR(id: number): Promise<InstanceQRResponse> {
+    return this.request<InstanceQRResponse>(`/instances/${id}/qr`);
   }
 
-  async disconnectInstance(jid: string): Promise<void> {
-    await this.request(`/instances/${encodeURIComponent(jid)}/disconnect`, { method: "POST" });
+  async updateInstance(id: number, data: InstanceUpdate): Promise<Instance> {
+    const res = await this.request<{ success: boolean; instance: Instance }>(`/instances/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return res.instance;
   }
 
-  async deleteInstance(jid: string): Promise<void> {
-    await this.request(`/instances/${encodeURIComponent(jid)}`, { method: "DELETE" });
+  async reconnectInstance(id: number): Promise<void> {
+    await this.request(`/instances/${id}/reconnect`, { method: "POST" });
+  }
+
+  async disconnectInstance(id: number): Promise<void> {
+    await this.request(`/instances/${id}/disconnect`, { method: "POST" });
+  }
+
+  /** Retires the number and drops its session. Messages already captured are kept. */
+  async removeInstance(id: number): Promise<void> {
+    await this.request(`/instances/${id}`, { method: "DELETE" });
   }
 
   // Chats and Messages
-  async getChats(): Promise<ChatItem[]> {
-    const res = await this.request<{ success: boolean; chats?: ChatItem[] }>("/chats");
+  async getChats(instance?: string): Promise<ChatItem[]> {
+    const res = await this.request<{ success: boolean; chats?: ChatItem[] }>(
+      `/chats${instance ? `?instance=${encodeURIComponent(instance)}` : ""}`
+    );
     return res.chats || [];
   }
 
@@ -409,6 +531,47 @@ export class WhatsAppAPI {
       `/messages?chat_jid=${encodeURIComponent(chatJid)}&limit=${limit}`
     );
     return res.messages || [];
+  }
+
+  // Audit
+  /** Messages across all numbers, newest first, filtered by number, person, department, text or dates. */
+  async getMessageFeed(filters: FeedFilters = {}): Promise<FeedMessage[]> {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== "" && value !== false) search.set(key, String(value));
+    }
+    const qs = search.toString();
+    const res = await this.request<{ success: boolean; messages?: FeedMessage[] }>(
+      `/messages/feed${qs ? `?${qs}` : ""}`
+    );
+    return res.messages || [];
+  }
+
+  async getMessageVersions(instance: string, chatJid: string, messageId: string): Promise<MessageVersion[]> {
+    const search = new URLSearchParams({ instance, chat_jid: chatJid, message_id: messageId });
+    const res = await this.request<{ success: boolean; versions?: MessageVersion[] }>(
+      `/messages/versions?${search.toString()}`
+    );
+    return res.versions || [];
+  }
+
+  async getAccessLog(limit = 100): Promise<AccessLogEntry[]> {
+    const res = await this.request<{ success: boolean; entries?: AccessLogEntry[] }>(`/access-log?limit=${limit}`);
+    return res.entries || [];
+  }
+
+  // Privacy (LGPD)
+  async anonymizeSubject(subject: string): Promise<{ messages: number; chats: number; media_removed: number; pseudonym: string }> {
+    return this.request("/privacy/anonymize", { method: "POST", body: JSON.stringify({ subject }) });
+  }
+
+  async purgeOlderThan(days: number): Promise<{ removed: number }> {
+    return this.request("/privacy/purge", { method: "POST", body: JSON.stringify({ days }) });
+  }
+
+  async getPrivacyLog(limit = 100): Promise<PrivacyLogEntry[]> {
+    const res = await this.request<{ success: boolean; entries?: PrivacyLogEntry[] }>(`/privacy/log?limit=${limit}`);
+    return res.entries || [];
   }
 }
 

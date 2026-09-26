@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Users, Plus, Pencil, Trash2, Loader2, Search, Building2, Phone } from "lucide-react";
+import { Users, Plus, Pencil, Trash2, Loader2, Search, Building2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -52,7 +53,8 @@ export default function EmployeesPage() {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [deptId, setDeptId] = useState<string>("none");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [active, setActive] = useState(true);
 
   const api = useMemo(() => new WhatsAppAPI(), []);
 
@@ -102,7 +104,8 @@ export default function EmployeesPage() {
     setName("");
     setRole("");
     setDeptId("none");
-    setPhoneNumber("");
+    setEmail("");
+    setActive(true);
     setDialogOpen(true);
   };
 
@@ -111,7 +114,8 @@ export default function EmployeesPage() {
     setName(emp.name);
     setRole(emp.role || "");
     setDeptId(emp.department_id ? emp.department_id.toString() : "none");
-    setPhoneNumber(emp.phone_number || "");
+    setEmail(emp.email || "");
+    setActive(emp.active);
     setDialogOpen(true);
   };
 
@@ -129,11 +133,11 @@ export default function EmployeesPage() {
         name: name.trim(),
         role: role.trim(),
         department_id: parsedDeptId,
-        phone_number: phoneNumber.trim(),
+        email: email.trim(),
       };
 
       if (editingEmp) {
-        await api.updateEmployee(editingEmp.id, payload);
+        await api.updateEmployee(editingEmp.id, { ...payload, active });
         toast.success("Colaborador atualizado com sucesso.");
       } else {
         await api.createEmployee(payload);
@@ -170,7 +174,7 @@ export default function EmployeesPage() {
       const matchesSearch =
         emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (emp.role && emp.role.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (emp.phone_number && emp.phone_number.includes(searchQuery));
+        (emp.email && emp.email.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesDept =
         selectedDeptFilter === "all" ||
@@ -282,6 +286,11 @@ export default function EmployeesPage() {
 
               <CardContent className="space-y-3 pt-0">
                 <div className="flex flex-wrap items-center gap-1.5">
+                  {!emp.active && (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">
+                      Inativo
+                    </Badge>
+                  )}
                   {emp.department_name ? (
                     <Badge variant="secondary" className="gap-1 text-xs">
                       <Building2 className="size-3" />
@@ -294,10 +303,10 @@ export default function EmployeesPage() {
                   )}
                 </div>
 
-                {emp.phone_number && (
+                {emp.email && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Phone className="size-3.5" />
-                    <span>{emp.phone_number}</span>
+                    <Mail className="size-3.5" />
+                    <span>{emp.email}</span>
                   </div>
                 )}
               </CardContent>
@@ -357,14 +366,25 @@ export default function EmployeesPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="emp-phone">Número de Telefone</Label>
+                <Label htmlFor="emp-email">E-mail</Label>
                 <Input
-                  id="emp-phone"
-                  placeholder="Ex: 5511999998888"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  id="emp-email"
+                  type="email"
+                  placeholder="nome@empresa.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
+
+              {editingEmp && (
+                <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+                  <div className="text-xs">
+                    <p className="font-medium">Colaborador ativo</p>
+                    <p className="text-muted-foreground">Inativos deixam de aparecer para a IA ao buscar pessoas.</p>
+                  </div>
+                  <Switch checked={active} onCheckedChange={setActive} aria-label="Colaborador ativo" />
+                </div>
+              )}
             </div>
 
             <DialogFooter>

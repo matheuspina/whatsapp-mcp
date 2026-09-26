@@ -99,6 +99,26 @@ its model differs from the one the index was built with, so set the same values 
 If the model cannot be loaded (for example no network on the first start), the indexer keeps indexing
 keywords and retries every five minutes.
 
+## Several numbers
+
+Messages and chunks are keyed by number **and** chat: the same customer talking to two monitored numbers is two
+conversations, and a chunk never mixes them. Results carry a `number` (JID, alias, current holder and department).
+The index schema is versioned; an index from an older version is rebuilt from `messages.db` automatically (see
+[migrations.md](migrations.md)).
+
+`search_messages` takes `department_id`, `employee_id` and `instance_jid`. Employee and department filters follow the
+assignment history: they match the numbers those people held, only for the periods they held them, and an excerpt that
+spans a change of hands only returns the messages of the requested side. `search_department_conversations` is the same
+search with the department already applied. An MCP client's access policy applies on top of these filters and can be
+narrowed but never widened by them; see [governance.md](governance.md).
+
+`get_employee_activity_summary(employee_id, period)` counts, from the index, what the numbers an employee held handled
+in a period (received, sent, conversations, active days, revoked messages, a per-day series, the busiest conversations,
+and first-response times) without reading the messages.
+
+Anonymizing a person or applying the retention policy is recorded by the bridge in `privacy_log`. The indexer reads that
+log on every pass, drops the affected chats or messages from the index, and rebuilds the chunks that lost neighbours.
+
 ## Chunking
 
 Each chat's messages are split into windows so each vector describes a coherent piece of conversation. A

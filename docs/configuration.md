@@ -42,7 +42,7 @@ See [history-sync.md](history-sync.md).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WHATSAPP_MCP_TOOLSETS` | `all` | Toolsets to expose, comma separated: `core`, `send`, `media`, `history`, `contacts_write`, `message_admin`, `groups`, `presence`, `account_admin`, `newsletter`, `search`, or `all`. |
+| `WHATSAPP_MCP_TOOLSETS` | `all` | Toolsets to expose, comma separated: `core`, `send`, `media`, `history`, `contacts_write`, `message_admin`, `groups`, `presence`, `account_admin`, `newsletter`, `search`, `organization`, or `all`. |
 | `WHATSAPP_MCP_TOOLS` | *(none)* | Individual tools to expose in addition, by name (for example `manage_group,delete_message`). |
 | `MCP_TRANSPORT` | `stdio` (`streamable-http` in Docker) | `stdio`, `sse` or `streamable-http`. |
 | `HOST` / `PORT` | `0.0.0.0` / `8081` | Bind address for the HTTP transports. |
@@ -81,6 +81,20 @@ Read by the MCP server's `search` toolset (`search_messages`, `index_status`). S
 | `SEARCH_K_VEC` | `50` | Semantic candidates taken before fusing with the keyword ones. |
 | `SEARCH_MIN_SIMILARITY` | `0` | Drop semantic matches below this cosine similarity (0 keeps everything). Scores of the default model cluster between roughly 0.8 and 0.9, so tune it against your own history before setting it. |
 | `DISPLAY_TZ` | `America/Bahia` | Timezone for the `date_from` / `date_to` filters and for the dates in results. |
+
+## Governance
+
+See [governance.md](governance.md).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RETENTION_DAYS` | `0` (off) | Delete captured messages older than this many days, at startup and then daily. |
+| `REQUIRE_CORPORATE_CONFIRMATION` | `false` | When `true`, messages of numbers without the corporate-asset attestation are not recorded. |
+| `INSTANCE_ALLOW_SEND_DEFAULT` | `true` | Send permission of numbers registered without an explicit choice (existing numbers, the first device). Set `false` for monitoring only. Numbers paired from the panel choose per number. |
+| `MAX_PENDING_PAIRINGS` | `5` | QR pairings that can be in progress at once. |
+| `MCP_ACCESS_POLICY` | *(unset)* | JSON file limiting what each MCP client may see and do. In Docker, `/app/store/access-policy.json`. |
+| `MCP_READ_ONLY` | `false` | Default for every MCP client: no tool that acts on WhatsApp. |
+| `MCP_ACCESS_LOG` | `true` | Record MCP tool calls in the bridge's access log. |
 
 ## Bridge
 

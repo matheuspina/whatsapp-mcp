@@ -7,8 +7,52 @@ All notable changes to this project are recorded here. The format follows
 
 Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 
+### Changed
+
+- **Several WhatsApp numbers.** The bridge now runs one client per paired number; every event, connection state,
+  reconnection and presence loop belongs to its own number. One number logging out, timing out or being replaced no
+  longer disconnects the others or restarts the container; the watchdog exits only when every paired number has been
+  offline for over three minutes. Each number has its own send warm-up state.
+- `messages` is keyed by `(instance_jid, chat_jid, id)`: the same group message seen by two numbers is stored once per
+  number instead of one overwriting the other. Chunks and messages in the search index are per number and chat, so a
+  customer talking to two numbers is two conversations. Migration `003` rebuilds the tables (with a backup) and the
+  search index is rebuilt from `messages.db` on the next indexer start. See [docs/migrations.md](docs/migrations.md).
+- Migrations `002` onward are applied by the bridge at startup and recorded in `schema_migrations`; the table definitions
+  are no longer repeated in Go code.
+- Writes to `messages.db` go through one writer that commits batches under per-task savepoints. Live messages are served
+  before history sync, and history sync no longer waits for each commit (it was limited to about 40 messages per second,
+  now thousands). Webhook configuration writes use the same writer. The upsert that stores a message no longer resets its
+  audit state when history sync redelivers it.
+- Routes that act on the WhatsApp account require `?instance=` when several numbers are paired and answer `403` for a
+  number without send permission. New `INSTANCE_ALLOW_SEND_DEFAULT`. MCP tools that act on WhatsApp accept `instance_jid`.
+- `GET /api/health` is healthy while any paired number is connected. `employee` updates are partial.
+- Web panel: *Números WhatsApp* (rewritten around instance ids: link people, send permission, attestation, a QR code that
+  renews itself), *Mensagens* is now a unified feed filtered by department, employee, number, text and dates.
+
+### Added
+
+- Organization model: departments, employees, numbers, and the history of who held each number (`instance_assignments`),
+  so messages stay with whoever held the number at the time. REST endpoints and panel pages for all of it.
+- Audit: revoked messages are flagged with when and by whom, edits and revocations keep the earlier text
+  (`message_versions`), a per-call access log (`access_log`), and a panel page *Auditoria*.
+- MCP: `list_departments`, `list_employees`, `resolve_employee`, `list_instances`, `get_audit_trail`,
+  `get_audit_deleted_messages`, `get_employee_activity_summary`, `search_department_conversations`, `list_access_log`, and
+  `department_id` / `employee_id` / `instance_jid` filters on `search_messages`.
+- Access policy for MCP clients (`MCP_ACCESS_POLICY`, `MCP_READ_ONLY`): which numbers and periods a client may read and
+  whether it may act on WhatsApp, enforced where data is read. Fails closed. See [docs/governance.md](docs/governance.md).
+- Corporate-asset attestation when pairing a number, optionally required to record (`REQUIRE_CORPORATE_CONFIRMATION`).
+- Privacy tools: anonymize a person, retention by age (`RETENTION_DAYS`), both logged and applied to the search index.
+- Webhook trigger type `instance_jid`, and `instance_jid` in webhook payloads.
+- Tests read the bridge's real migrations, so a Python query for a column the bridge does not create now fails a test.
+
 ### Fixed
 
+- `list_employees`, `resolve_employee` and `list_instances` returned nothing against a real database because they
+  queried columns the bridge never created; they now raise a clear error instead of returning an empty list.
+- The web panel called `/api/instances/undefined/...` and sent fields the bridge does not have; the contract now matches.
+- The "message deleted" badge never appeared because the read paths did not return the flag.
+- `Message.is_group` was dropped from the API response.
+- ESLint errors in the pairing dashboard and webhook components, and hard-coded palette colors on the numbers page.
 - The `indexer` service crash-looped with `sqlite3.OperationalError: unable to open database file` when `./store-index`
   did not exist: Docker created it as root and the non-root container user could not write to it. The index now lives
   in the `index-data` named volume.

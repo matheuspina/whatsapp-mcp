@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 os.environ.setdefault("WA_SKIP_DB_CHECK", "1")
+os.environ.setdefault("MCP_ACCESS_LOG", "false")
 
 GROUP_JID = "120363000000000000@g.us"
 GROUP_NAME = "Trabalho 2026"

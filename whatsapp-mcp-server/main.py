@@ -1,5 +1,7 @@
 """WhatsApp MCP Server - stdio transport for Claude Code CLI"""
 
+import functools
+import inspect
 import json
 import os
 from pathlib import Path
@@ -10,14 +12,17 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
 
+from lib import access as _access
+from lib import database as _database
 from lib.oauth import setup_oauth
 from lib.utils import MESSAGES_DB_PATH as _MESSAGES_DB_PATH
 from lib.utils import STORE_PATH as _STORE_PATH
 from lib.utils import WHATSAPP_API_BASE_URL as _BRIDGE_URL
+from search import analytics as _analytics
 from search import config as _search_config
 from search.embedder import create_embedder as _create_embedder
 from search.embedder import embeddings_enabled as _embeddings_enabled
-from search.search import SearchMode
+from search.search import SearchError, SearchMode
 from search.search import SearchService as _SearchService
 
 # Phase 2: Group Management
@@ -32,7 +37,6 @@ from whatsapp import demote_admin as whatsapp_demote_admin
 from whatsapp import download_media as whatsapp_download_media
 from whatsapp import edit_message as whatsapp_edit_message
 from whatsapp import follow_newsletter as whatsapp_follow_newsletter
-from whatsapp import get_audit_deleted_messages as whatsapp_get_audit_deleted_messages
 from whatsapp import get_blocklist as whatsapp_get_blocklist
 from whatsapp import get_chat as whatsapp_get_chat
 from whatsapp import get_contact_by_jid as whatsapp_get_contact_by_jid
@@ -48,15 +52,11 @@ from whatsapp import leave_group as whatsapp_leave_group
 from whatsapp import list_all_contacts as whatsapp_list_all_contacts
 from whatsapp import list_chats as whatsapp_list_chats
 from whatsapp import list_contact_nicknames as whatsapp_list_contact_nicknames
-from whatsapp import list_departments as whatsapp_list_departments
-from whatsapp import list_employees as whatsapp_list_employees
-from whatsapp import list_instances as whatsapp_list_instances
 from whatsapp import list_messages as whatsapp_list_messages
 from whatsapp import mark_messages_read as whatsapp_mark_messages_read
 from whatsapp import promote_to_admin as whatsapp_promote_to_admin
 from whatsapp import remove_contact_nickname as whatsapp_remove_contact_nickname
 from whatsapp import remove_group_members as whatsapp_remove_group_members
-from whatsapp import resolve_employee as whatsapp_resolve_employee
 
 # Phase 4: History Sync
 from whatsapp import request_chat_history as whatsapp_request_chat_history
@@ -128,6 +128,56 @@ def _tool_enabled(name: str, toolset: str) -> bool:
     return toolset in ENABLED_TOOLSETS or name in ENABLED_TOOLS
 
 
+_INSTANCE_NOTE = (
+    "Optional `instance_jid` (or phone number): the WhatsApp number to act as. Required when more than one "
+    "number is connected, so a message is never sent from the wrong person's phone. `list_instances` shows "
+    "the numbers and whether each may send."
+)
+
+
+def _guarded(func: Any, name: str, read_only: bool) -> Any:
+    """Wrap a tool so every call runs under the caller's access scope and is written to the access log.
+
+    The scope is what `lib.access` enforces on database reads; here the tool itself is checked (a
+    read-only client cannot call a tool that acts on WhatsApp) and denied attempts are logged too.
+    Tools that act on WhatsApp also accept `instance_jid`, which selects the sending number.
+    """
+    signature = inspect.signature(func)
+    outbound = not read_only
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        instance = kwargs.pop("instance_jid", None) if outbound else None
+        caller = _access.caller_id()
+        scope = _access.scope_for(caller)
+        result: Any = None
+        outcome = "ok"
+        scope_token = _access.set_scope(scope)
+        instance_token = _access.set_instance(instance)
+        try:
+            scope.check_tool(name, read_only_tool=read_only)
+            result = func(*args, **kwargs)
+            return result
+        except _access.AccessDenied:
+            outcome = "denied"
+            raise
+        except Exception:
+            outcome = "error"
+            raise
+        finally:
+            _access.reset_instance(instance_token)
+            _access.reset_scope(scope_token)
+            _access.record_call(name, caller, kwargs, result, outcome, read_only)
+
+    if outbound and "instance_jid" not in signature.parameters:
+        params = list(signature.parameters.values())
+        params.append(
+            inspect.Parameter("instance_jid", inspect.Parameter.KEYWORD_ONLY, default=None, annotation=str | None)
+        )
+        wrapper.__signature__ = signature.replace(parameters=params)  # type: ignore[attr-defined]
+    return wrapper
+
+
 def tool(
     toolset: str,
     title: str,
@@ -144,9 +194,13 @@ def tool(
         if not _tool_enabled(func.__name__, toolset):
             return func
 
+        text = description if description is not None else inspect.getdoc(func) or ""
+        if not read_only:
+            text = f"{text}\n\n{_INSTANCE_NOTE}".strip()
+
         return mcp.tool(
             title=title,
-            description=description,
+            description=text or None,
             annotations=ToolAnnotations(
                 title=title,
                 readOnlyHint=read_only,
@@ -154,7 +208,7 @@ def tool(
                 idempotentHint=idempotent,
                 openWorldHint=open_world,
             ),
-        )(func)
+        )(_guarded(func, func.__name__, read_only))
 
     return decorator
 
@@ -331,6 +385,9 @@ def search_messages(
     date_to: str | None = None,
     mode: SearchMode = "hybrid",
     limit: int = 10,
+    department_id: int | None = None,
+    employee_id: int | None = None,
+    instance_jid: str | None = None,
 ) -> dict[str, Any]:
     """Search messages by words and meaning.
 
@@ -342,9 +399,21 @@ def search_messages(
         date_to: Optional last day (inclusive), ISO `YYYY-MM-DD`, in America/Bahia time
         mode: `hybrid` (default) combines both, `keyword` matches words only, `semantic` matches meaning only
         limit: Excerpts to return (default 10, max 30)
+        department_id: Only conversations of the numbers operated by this department's people (see `list_departments`)
+        employee_id: Only conversations of the numbers this person operated, while they operated them (see `resolve_employee`)
+        instance_jid: Only conversations captured by this WhatsApp number (see `list_instances`)
     """
     return _get_search_service().search(
-        query=query, chat=chat, sender=sender, date_from=date_from, date_to=date_to, mode=mode, limit=limit
+        query=query,
+        chat=chat,
+        sender=sender,
+        date_from=date_from,
+        date_to=date_to,
+        mode=mode,
+        limit=limit,
+        department_id=department_id,
+        employee_id=employee_id,
+        instance_jid=instance_jid,
     )
 
 
@@ -885,33 +954,125 @@ def manage_newsletter(
 
 @tool("organization", "List Departments", read_only=True, idempotent=True, open_world=False)
 def list_departments() -> list[dict[str, Any]]:
-    """List all configured organizational departments (e.g. Sales, Support, Operations)."""
-    return whatsapp_list_departments()
+    """List the departments (sectors such as Comercial or Financeiro) whose WhatsApp numbers are monitored."""
+    return _database.list_departments()
 
 
 @tool("organization", "List Employees", read_only=True, idempotent=True, open_world=False)
-def list_employees(department_id: int | None = None, query: str | None = None) -> list[dict[str, Any]]:
-    """List all employees/team members, optionally filtered by department ID or name/role query."""
-    return whatsapp_list_employees(department_id=department_id, query=query)
+def list_employees(
+    department_id: int | None = None, query: str | None = None, include_inactive: bool = False
+) -> list[dict[str, Any]]:
+    """List employees with role, department and the numbers they operate now.
+
+    Args:
+        department_id: Only this department
+        query: Part of a name or role
+        include_inactive: Also list people marked inactive
+    """
+    return _database.list_employees(department_id=department_id, query=query, include_inactive=include_inactive)
 
 
 @tool("organization", "Resolve Employee", read_only=True, idempotent=True, open_world=False)
 def resolve_employee(query: str) -> dict[str, Any]:
-    """Resolve an employee by name or role to assist AI in finding team members and their associated department."""
-    return whatsapp_resolve_employee(query)
+    """Find which employee a name or role refers to ("João", "o vendedor").
+
+    When `ambiguous` is true several people match: ask the user which one instead of guessing.
+    Use the returned `id` with `get_employee_activity_summary`, `get_audit_trail` and `search_messages`.
+    """
+    return _database.resolve_employee(query)
 
 
 @tool("organization", "List Instances", read_only=True, idempotent=True, open_world=False)
-def list_instances() -> list[dict[str, Any]]:
-    """List all connected WhatsApp multi-device instances and their linked employees and departments."""
-    return whatsapp_list_instances()
+def list_instances(include_removed: bool = False) -> list[dict[str, Any]]:
+    """List the monitored WhatsApp numbers: who operates each, its status and whether it may send messages."""
+    return _database.list_instances(include_removed=include_removed)
 
 
 @tool("organization", "Get Audit Deleted Messages", read_only=True, idempotent=True, open_world=False)
-def get_audit_deleted_messages(chat_jid: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
-    """Retrieve audit records of messages that were remotely deleted on WhatsApp (anti-delete audit trail)."""
-    return whatsapp_get_audit_deleted_messages(chat_jid=chat_jid, limit=limit)
+def get_audit_deleted_messages(
+    chat_jid: str | None = None,
+    limit: int = 50,
+    instance_jid: str | None = None,
+    employee_id: int | None = None,
+    department_id: int | None = None,
+) -> list[dict[str, Any]]:
+    """Messages their sender revoked ("apagar para todos") with the text that was revoked.
 
+    Each row says which number captured it and who held that number at the time. Revoked text is kept in `versions`.
+    """
+    return _database.get_audit_deleted_messages(
+        chat_jid=chat_jid, limit=limit, instance_jid=instance_jid, employee_id=employee_id, department_id=department_id
+    )
+
+
+@tool("organization", "Get Audit Trail", read_only=True, idempotent=True, open_world=False)
+def get_audit_trail(
+    chat_jid: str | None = None,
+    employee_id: int | None = None,
+    instance_jid: str | None = None,
+    department_id: int | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Audit trail of a conversation or of the numbers a person or department operated.
+
+    Lists every stored copy of each message (one per number that captured it) with who held the number at that
+    moment, and for edited or revoked messages the earlier texts. Give at least one of chat_jid, employee_id,
+    instance_jid or department_id. `since` and `until` are ISO timestamps (until is exclusive).
+    """
+    return _database.get_audit_trail(
+        chat_jid=chat_jid,
+        employee_id=employee_id,
+        instance_jid=instance_jid,
+        department_id=department_id,
+        since=since,
+        until=until,
+        limit=limit,
+    )
+
+
+@tool("organization", "Get Employee Activity Summary", read_only=True, idempotent=True, open_world=False)
+def get_employee_activity_summary(employee_id: int, period: str = "7d") -> dict[str, Any]:
+    """What the numbers an employee operates handled in a period, without reading the messages.
+
+    Returns totals (received, sent, conversations, active days, messages deleted by the sender), a per-day series,
+    the busiest conversations and how fast the person answered customers. Only the time the person held the number
+    counts. `period` is today, yesterday, this_week, last_week, this_month, last_month, a number of days like `7d`
+    or `30d`, or `YYYY-MM-DD..YYYY-MM-DD`. To read the conversations themselves use `search_messages` with
+    `employee_id`.
+    """
+    try:
+        return _analytics.employee_activity_summary(
+            employee_id, period, messages_db_path=_MESSAGES_DB_PATH, display_tz=_search_config.DISPLAY_TZ
+        )
+    except SearchError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+@tool("search", "Search Department Conversations", read_only=True, idempotent=True, open_world=False)
+def search_department_conversations(
+    department_id: int,
+    query: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    mode: SearchMode = "hybrid",
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Search only the conversations of one department's numbers, by words and meaning.
+
+    Same as `search_messages` with the department already applied: use it for questions such as "what did Financeiro
+    say about the Acme invoice". Get the id from `list_departments`. Dates are ISO `YYYY-MM-DD`.
+    """
+    return _get_search_service().search(
+        query=query, date_from=date_from, date_to=date_to, mode=mode, limit=limit, department_id=department_id
+    )
+
+
+@tool("organization", "List Access Log", read_only=True, idempotent=True, open_world=False)
+def list_access_log(limit: int = 100) -> list[dict[str, Any]]:
+    """Who queried message data through this server or the panel, newest first. Unrestricted clients only."""
+    return _database.list_access_log(limit)
 
 
 def _bridge_get(path: str) -> dict[str, Any]:

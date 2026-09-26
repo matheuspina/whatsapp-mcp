@@ -1,6 +1,6 @@
 """Tests for search/index_store.py: schema, FTS sync, upsert idempotency."""
 
-from search.index_store import Chunk, IndexedMessage, IndexStore
+from search.index_store import SCHEMA_VERSION, Chunk, IndexedMessage, IndexStore
 
 CHAT = "trabalho2026@g.us"
 
@@ -28,7 +28,7 @@ class TestMeta:
     def test_schema_version_is_set_on_init(self, tmp_path):
         s = store(tmp_path)
         try:
-            assert s.get_meta("schema_version") == "1"
+            assert s.get_meta("schema_version") == SCHEMA_VERSION
         finally:
             s.close()
 

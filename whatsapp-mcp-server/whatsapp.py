@@ -31,6 +31,7 @@ except ImportError:
     pass  # python-dotenv not available, continue without it
 
 import audio
+from lib.access import connect_messages, connect_messages_rw, connect_whatsapp
 from lib.bridge import _get_headers
 from lib.utils import MESSAGES_DB_PATH, WHATSAPP_DB_PATH
 
@@ -128,7 +129,7 @@ def _resolve_equivalent_jids(jid: str) -> list[str]:
     if suffix not in ("s.whatsapp.net", "lid"):
         return [jid]
     try:
-        conn = sqlite3.connect(WHATSAPP_DB_PATH)
+        conn = connect_whatsapp(WHATSAPP_DB_PATH)
         cursor = conn.cursor()
         if suffix == "s.whatsapp.net":
             row = cursor.execute("SELECT lid FROM whatsmeow_lid_map WHERE pn = ?", (bare,)).fetchone()
@@ -187,7 +188,7 @@ def get_sender_name(sender_jid: str) -> str:
             return nickname
 
         # Try to get rich contact information from WhatsApp store
-        whatsapp_conn = sqlite3.connect(WHATSAPP_DB_PATH)
+        whatsapp_conn = connect_whatsapp(WHATSAPP_DB_PATH)
         whatsapp_cursor = whatsapp_conn.cursor()
 
         # Look for contact in WhatsApp contacts
@@ -210,7 +211,7 @@ def get_sender_name(sender_jid: str) -> str:
             return full_name or push_name or first_name or business_name or sender_jid
 
         # Fall back to chat database
-        messages_conn = sqlite3.connect(MESSAGES_DB_PATH)
+        messages_conn = connect_messages(MESSAGES_DB_PATH)
         messages_cursor = messages_conn.cursor()
 
         # First try matching by exact JID
@@ -308,7 +309,7 @@ def list_messages(
     Returns a list of message dictionaries with structured data.
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         # Build base query - include filename and file_length for media metadata
@@ -415,7 +416,7 @@ def list_messages(
 def get_message_context(message_id: str, before: int = 5, after: int = 5) -> MessageContext:
     """Get context around a specific message."""
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         # Get the target message first
@@ -528,7 +529,7 @@ def list_chats(
     print(f"Debug: Database exists: {os.path.exists(MESSAGES_DB_PATH)}")
 
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         # Debug: Check if tables exist
@@ -628,7 +629,7 @@ def search_contacts(query: str) -> list[dict[str, Any]]:
     """Search contacts by name or phone number using both WhatsApp contacts and chat data."""
     try:
         # Connect to both databases
-        whatsapp_conn = sqlite3.connect(WHATSAPP_DB_PATH)
+        whatsapp_conn = connect_whatsapp(WHATSAPP_DB_PATH)
         whatsapp_cursor = whatsapp_conn.cursor()
 
         # Split query into characters to support partial matching
@@ -703,7 +704,7 @@ def get_contact_chats(jid: str, limit: int = 20, page: int = 0) -> list[dict[str
         page: Page number for pagination (default 0)
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         equiv = _resolve_equivalent_jids(jid)
@@ -758,7 +759,7 @@ def get_contact_chats(jid: str, limit: int = 20, page: int = 0) -> list[dict[str
 def get_last_interaction(jid: str) -> dict[str, Any] | None:
     """Get most recent message involving the contact."""
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         equiv = _resolve_equivalent_jids(jid)
@@ -819,7 +820,7 @@ def get_last_interaction(jid: str) -> dict[str, Any] | None:
 def get_chat(chat_jid: str, include_last_message: bool = True) -> dict[str, Any] | None:
     """Get chat metadata by JID."""
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         query = """
@@ -878,7 +879,7 @@ def get_chat(chat_jid: str, include_last_message: bool = True) -> dict[str, Any]
 def get_direct_chat_by_contact(sender_phone_number: str) -> dict[str, Any] | None:
     """Get chat metadata by sender phone number."""
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         equiv = _resolve_equivalent_jids(f"{sender_phone_number}@s.whatsapp.net")
@@ -1163,7 +1164,7 @@ def get_contact_by_jid(jid: str) -> Contact | None:
     """Get detailed contact information by JID."""
     try:
         # First try WhatsApp contacts database
-        whatsapp_conn = sqlite3.connect(WHATSAPP_DB_PATH)
+        whatsapp_conn = connect_whatsapp(WHATSAPP_DB_PATH)
         whatsapp_cursor = whatsapp_conn.cursor()
 
         whatsapp_cursor.execute(
@@ -1200,7 +1201,7 @@ def get_contact_by_jid(jid: str) -> Contact | None:
             )
 
         # Fall back to chats database
-        messages_conn = sqlite3.connect(MESSAGES_DB_PATH)
+        messages_conn = connect_messages(MESSAGES_DB_PATH)
         messages_cursor = messages_conn.cursor()
 
         messages_cursor.execute(
@@ -1241,7 +1242,7 @@ def get_contact_by_phone(phone_number: str) -> Contact | None:
                 return contact
 
         # Try partial matching in chats
-        messages_conn = sqlite3.connect(MESSAGES_DB_PATH)
+        messages_conn = connect_messages(MESSAGES_DB_PATH)
         messages_cursor = messages_conn.cursor()
 
         messages_cursor.execute(
@@ -1274,7 +1275,7 @@ def list_all_contacts(limit: int = 100) -> list[Contact]:
         contacts = []
 
         # Get contacts from WhatsApp store
-        whatsapp_conn = sqlite3.connect(WHATSAPP_DB_PATH)
+        whatsapp_conn = connect_whatsapp(WHATSAPP_DB_PATH)
         whatsapp_cursor = whatsapp_conn.cursor()
 
         whatsapp_cursor.execute(
@@ -1356,7 +1357,7 @@ def set_contact_nickname(jid: str, nickname: str) -> dict[str, Any]:
         Structured dict with success, jid, nickname, updated_at
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages_rw(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         # Insert or update nickname
@@ -1387,7 +1388,7 @@ def set_contact_nickname(jid: str, nickname: str) -> dict[str, Any]:
 def get_contact_nickname(jid: str) -> str | None:
     """Get a contact's custom nickname."""
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute(
@@ -1417,7 +1418,7 @@ def remove_contact_nickname(jid: str) -> dict[str, Any]:
         Structured dict with success, jid
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages_rw(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute("DELETE FROM contact_nicknames WHERE jid = ?", (jid,))
@@ -1442,7 +1443,7 @@ def list_contact_nicknames() -> list[dict[str, Any]]:
         List of dicts with jid, nickname, created_at, updated_at
     """
     try:
-        conn = sqlite3.connect(MESSAGES_DB_PATH)
+        conn = connect_messages(MESSAGES_DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -2491,39 +2492,3 @@ def archive_chat(chat_jid: str, archive: bool = True) -> dict[str, Any]:
             return {"success": False, "chat_jid": chat_jid, "error": f"HTTP {response.status_code} - {response.text}"}
     except requests.RequestException as e:
         return {"success": False, "chat_jid": chat_jid, "error": f"Request error: {str(e)}"}
-
-
-def list_departments() -> list[dict[str, Any]]:
-    """List all organizational departments (e.g. Sales, Support, Operations)."""
-    from lib.database import list_departments as _list_departments
-
-    return _list_departments()
-
-
-def list_employees(department_id: int | None = None, query: str | None = None) -> list[dict[str, Any]]:
-    """List all employees/team members, optionally filtered by department or name."""
-    from lib.database import list_employees as _list_employees
-
-    return _list_employees(department_id=department_id, query=query)
-
-
-def resolve_employee(name_or_query: str) -> dict[str, Any]:
-    """Resolve an employee by name or role to assist AI in finding team members."""
-    from lib.database import resolve_employee as _resolve_employee
-
-    return _resolve_employee(name_or_query)
-
-
-def list_instances() -> list[dict[str, Any]]:
-    """List all connected WhatsApp instances and their linked employees and departments."""
-    from lib.database import list_instances as _list_instances
-
-    return _list_instances()
-
-
-def get_audit_deleted_messages(chat_jid: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
-    """Retrieve audit records of messages that were remotely deleted on WhatsApp."""
-    from lib.database import get_audit_deleted_messages as _get_audit_deleted_messages
-
-    return _get_audit_deleted_messages(chat_jid=chat_jid, limit=limit)
-

@@ -78,21 +78,6 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chunks_chat_ts ON chunks(instance_jid, chat_jid, start_ts, end_ts);
-
--- Per number, chat and day: how much was said. Rebuilt by the indexer for the days it touches.
-CREATE TABLE IF NOT EXISTS activity_daily (
-    instance_jid TEXT NOT NULL,
-    chat_jid TEXT NOT NULL,
-    day TEXT NOT NULL,
-    received INTEGER NOT NULL DEFAULT 0,
-    sent INTEGER NOT NULL DEFAULT 0,
-    deleted INTEGER NOT NULL DEFAULT 0,
-    first_ts INTEGER,
-    last_ts INTEGER,
-    PRIMARY KEY (instance_jid, chat_jid, day)
-);
-
-CREATE INDEX IF NOT EXISTS idx_activity_day ON activity_daily(instance_jid, day);
 """
 
 
@@ -231,11 +216,6 @@ class IndexStore:
 
     def _init_schema(self) -> None:
         self._conn.executescript(_SCHEMA_SQL)
-        for col in ("instance_jid TEXT", "is_deleted_remote INTEGER DEFAULT 0"):
-            try:
-                self._conn.execute(f"ALTER TABLE messages_idx ADD COLUMN {col}")
-            except sqlite3.OperationalError:
-                pass
         if self.get_meta("schema_version") is None:
             self.set_meta("schema_version", SCHEMA_VERSION)
         self._conn.commit()
@@ -263,29 +243,37 @@ class IndexStore:
     # -- messages ---------------------------------------------------------
 
     def upsert_messages(self, rows: list[IndexedMessage]) -> None:
-        """Insert or update messages_idx rows, keyed on (chat_jid, message_id).
+        """Insert or update messages_idx rows, keyed on (instance_jid, chat_jid, message_id).
 
         Uses UPSERT (not INSERT OR REPLACE) so a replayed/replaced message
         keeps its rowid and updates the FTS index via the AFTER UPDATE
         trigger, rather than churning through a delete+insert.
+
+        A message first indexed before its number was known (instance "") is dropped when the same
+        message arrives attributed to a number, so it is not searchable twice.
         """
         if not rows:
             return
+        attributed = [(r.chat_jid, r.message_id) for r in rows if r.instance_jid]
+        if attributed:
+            self._conn.executemany(
+                "DELETE FROM messages_idx WHERE instance_jid = '' AND chat_jid = ? AND message_id = ?", attributed
+            )
         self._conn.executemany(
             """
-            INSERT INTO messages_idx (message_id, chat_jid, ts, sender_jid, sender_name, from_me, text, instance_jid, is_deleted_remote)
+            INSERT INTO messages_idx (instance_jid, message_id, chat_jid, ts, sender_jid, sender_name, from_me, text, is_deleted_remote)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(chat_jid, message_id) DO UPDATE SET
+            ON CONFLICT(instance_jid, chat_jid, message_id) DO UPDATE SET
                 ts = excluded.ts,
                 sender_jid = excluded.sender_jid,
                 sender_name = excluded.sender_name,
                 from_me = excluded.from_me,
                 text = excluded.text,
-                instance_jid = excluded.instance_jid,
                 is_deleted_remote = excluded.is_deleted_remote
             """,
             [
                 (
+                    r.instance_jid or "",
                     r.message_id,
                     r.chat_jid,
                     r.ts,
@@ -293,7 +281,6 @@ class IndexStore:
                     r.sender_name,
                     int(r.from_me),
                     r.text,
-                    r.instance_jid,
                     int(r.is_deleted_remote),
                 )
                 for r in rows
@@ -301,28 +288,33 @@ class IndexStore:
         )
         self._conn.commit()
 
-    def get_messages_in_range(self, chat_jid: str, start_ts: int, end_ts: int) -> list[ChunkMessage]:
+    def get_messages_in_range(
+        self, chat_jid: str, start_ts: int, end_ts: int, instance_jid: str = ""
+    ) -> list[ChunkMessage]:
         rows = self._conn.execute(
             """
             SELECT message_id, ts, sender_name, text
             FROM messages_idx
-            WHERE chat_jid = ? AND ts BETWEEN ? AND ?
+            WHERE instance_jid = ? AND chat_jid = ? AND ts BETWEEN ? AND ?
             ORDER BY ts ASC, message_id ASC
             """,
-            (chat_jid, start_ts, end_ts),
+            (instance_jid, chat_jid, start_ts, end_ts),
         ).fetchall()
         return [ChunkMessage(message_id=r[0], ts=r[1], sender_name=r[2] or "", text=r[3] or "") for r in rows]
 
     # -- chunks -----------------------------------------------------------
 
-    def get_chunks_touching(self, chat_jid: str, start_ts: int, end_ts: int) -> list[ChunkRow]:
+    def get_chunks_touching(self, chat_jid: str, start_ts: int, end_ts: int, instance_jid: str = "") -> list[ChunkRow]:
         rows = self._conn.execute(
-            "SELECT chunk_id, start_ts, end_ts FROM chunks WHERE chat_jid = ? AND start_ts <= ? AND end_ts >= ?",
-            (chat_jid, end_ts, start_ts),
+            "SELECT chunk_id, start_ts, end_ts FROM chunks "
+            "WHERE instance_jid = ? AND chat_jid = ? AND start_ts <= ? AND end_ts >= ?",
+            (instance_jid, chat_jid, end_ts, start_ts),
         ).fetchall()
         return [ChunkRow(chunk_id=r[0], start_ts=r[1], end_ts=r[2]) for r in rows]
 
-    def replace_chunks(self, chat_jid: str, old_chunk_ids: list[str], new_chunks: list[Chunk]) -> None:
+    def replace_chunks(
+        self, chat_jid: str, old_chunk_ids: list[str], new_chunks: list[Chunk], instance_jid: str = ""
+    ) -> None:
         """Delete stale chunks and (re)insert the freshly computed ones.
 
         New chunks always land with embedded=0: any chunk touched by a
@@ -341,8 +333,8 @@ class IndexStore:
         for chunk in new_chunks:
             self._conn.execute(
                 """
-                INSERT INTO chunks (chunk_id, chat_jid, chat_name, is_group, start_ts, end_ts, message_ids, senders, text, embedded)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                INSERT INTO chunks (chunk_id, instance_jid, chat_jid, chat_name, is_group, start_ts, end_ts, message_ids, senders, text, embedded)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 ON CONFLICT(chunk_id) DO UPDATE SET
                     chat_name = excluded.chat_name,
                     is_group = excluded.is_group,
@@ -355,6 +347,7 @@ class IndexStore:
                 """,
                 (
                     chunk.chunk_id,
+                    instance_jid,
                     chat_jid,
                     chunk.chat_name,
                     int(chunk.is_group),
@@ -368,10 +361,46 @@ class IndexStore:
             if chunk.primary_message_ids:
                 placeholders = ",".join("?" * len(chunk.primary_message_ids))
                 self._conn.execute(
-                    f"UPDATE messages_idx SET chunk_id = ? WHERE chat_jid = ? AND message_id IN ({placeholders})",
-                    (chunk.chunk_id, chat_jid, *chunk.primary_message_ids),
+                    "UPDATE messages_idx SET chunk_id = ? "
+                    f"WHERE instance_jid = ? AND chat_jid = ? AND message_id IN ({placeholders})",
+                    (chunk.chunk_id, instance_jid, chat_jid, *chunk.primary_message_ids),
                 )
         self._conn.commit()
+
+    # -- privacy ------------------------------------------------------------------
+
+    def purge_chat(self, chat_jid: str) -> int:
+        """Remove everything indexed for a chat identifier (all numbers). Returns messages removed."""
+        return self._purge("chat_jid = ?", (chat_jid,), "chat_jid = ?", (chat_jid,))
+
+    def purge_before(self, cutoff_ts: int) -> int:
+        """Remove messages older than the cutoff and every chunk that contains one (retention policy)."""
+        return self._purge("ts < ?", (cutoff_ts,), "start_ts < ?", (cutoff_ts,))
+
+    def _purge(self, message_where: str, message_args: tuple, chunk_where: str, chunk_args: tuple) -> int:
+        chunk_ids = {r[0] for r in self._conn.execute(f"SELECT chunk_id FROM chunks WHERE {chunk_where}", chunk_args)}
+        self._delete_vectors_for(chunk_ids)
+        if chunk_ids:
+            marks = ",".join("?" * len(chunk_ids))
+            self._conn.execute(f"DELETE FROM chunks WHERE chunk_id IN ({marks})", tuple(chunk_ids))
+        removed = self._conn.execute(f"DELETE FROM messages_idx WHERE {message_where}", message_args).rowcount
+        self._conn.commit()
+        return removed
+
+    def unchunked_ranges(self) -> list[tuple[str, str, int, int]]:
+        """(instance_jid, chat_jid, min_ts, max_ts) of messages whose chunk no longer exists.
+
+        After a purge some messages lose their chunk although they stay in the index; these ranges say
+        which regions to rebuild.
+        """
+        rows = self._conn.execute(
+            """
+            SELECT instance_jid, chat_jid, MIN(ts), MAX(ts) FROM messages_idx
+            WHERE chunk_id IS NULL OR chunk_id NOT IN (SELECT chunk_id FROM chunks)
+            GROUP BY instance_jid, chat_jid
+            """
+        ).fetchall()
+        return [(r[0], r[1], r[2], r[3]) for r in rows]
 
     # -- vectors ------------------------------------------------------------
 
@@ -464,7 +493,10 @@ class IndexStore:
     # -- search -------------------------------------------------------------
 
     def search_fts(self, query: str, limit: int = 20) -> list[tuple[str, str, str]]:
-        """Keyword search over indexed message text. Returns (chat_jid, message_id, text)."""
+        """Keyword search over indexed message text. Returns (chat_jid, message_id, text).
+
+        Unscoped by design: callers that must respect an access scope go through SearchService.
+        """
         rows = self._conn.execute(
             """
             SELECT m.chat_jid, m.message_id, m.text

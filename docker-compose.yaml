@@ -92,6 +92,11 @@ services:
       - WEB_UI_PASSWORD=${WEB_UI_PASSWORD:-}
       - MCP_OAUTH_ACCESS_TOKEN_TTL=${MCP_OAUTH_ACCESS_TOKEN_TTL:-3600}
       - MCP_OAUTH_REFRESH_TOKEN_TTL=${MCP_OAUTH_REFRESH_TOKEN_TTL:-2592000}
+      # Who may see what through MCP, see docs/governance.md. Put the policy file in ./store, which is mounted at
+      # /app/store, and set MCP_ACCESS_POLICY=/app/store/access-policy.json.
+      - MCP_ACCESS_POLICY=${MCP_ACCESS_POLICY:-}
+      - MCP_READ_ONLY=${MCP_READ_ONLY:-false}
+      - MCP_ACCESS_LOG=${MCP_ACCESS_LOG:-true}
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8081), timeout=3)"]
       interval: 30s

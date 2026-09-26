@@ -417,3 +417,35 @@ func TestAccessLogRoundTrip(t *testing.T) {
 		t.Errorf("unexpected entries: %+v err=%v", entries, err)
 	}
 }
+
+func TestUpsertMovesTheRowIDOnlyWhenTheTextChanges(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Now()
+	chat := "cliente@s.whatsapp.net"
+	putMessage(t, store, joaoJID, chat, "M1", "cliente", "texto", now)
+	putMessage(t, store, joaoJID, chat, "OTHER", "cliente", "outro", now)
+
+	rowID := func() int64 {
+		var id int64
+		if err := store.db.QueryRow("SELECT rowid FROM messages WHERE id = 'M1'").Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	first := rowID()
+
+	// The same message delivered again (history sync): nothing changed, the indexer has nothing to redo.
+	putMessage(t, store, joaoJID, chat, "M1", "cliente", "texto", now)
+	if got := rowID(); got != first {
+		t.Errorf("an identical redelivery must keep its rowid: %d -> %d", first, got)
+	}
+
+	// The text differs: the row moves past the current maximum so the indexer reads it again.
+	putMessage(t, store, joaoJID, chat, "M1", "cliente", "texto corrigido", now)
+	if got := rowID(); got <= first {
+		t.Errorf("a changed message must move to a new rowid: %d -> %d", first, got)
+	}
+	if got := countRows(t, store, "SELECT COUNT(*) FROM messages WHERE id = 'M1'"); got != 1 {
+		t.Errorf("the upsert must not create a second row, got %d", got)
+	}
+}

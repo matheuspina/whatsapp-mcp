@@ -15,11 +15,13 @@ import sqlite3
 import time
 import unicodedata
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
+from lib import access
+from lib.access import Window
 from lib.utils import logger
 
 from . import config, source
@@ -82,6 +84,9 @@ class _Filters:
     sender_jids: list[str] | None = None
     ts_from: int | None = None
     ts_to: int | None = None
+    # Each set is an OR of windows (a number, optionally for a period); a message must satisfy every
+    # set. Sets come from the caller's access scope and from the department/employee/instance filters.
+    window_sets: list[tuple[Window, ...]] = field(default_factory=list)
 
     @property
     def any(self) -> bool:
@@ -90,6 +95,45 @@ class _Filters:
 
 def _marks(values: list[Any]) -> str:
     return ",".join("?" * len(values))
+
+
+def _window_sql(windows: tuple[Window, ...], alias: str, *, span: bool) -> tuple[str, list[Any]]:
+    """SQL (and parameters) testing that a row belongs to one of the windows.
+
+    For messages (``span=False``) the timestamp must fall inside the window. For chunks
+    (``span=True``) the chunk's time span must overlap it.
+    """
+    if not windows:
+        return "0", []
+    parts: list[str] = []
+    params: list[Any] = []
+    for w in windows:
+        cond: list[str] = [f"{alias}.instance_jid = ?"]
+        args: list[Any] = [w.instance_jid]
+        if w.start is not None:
+            cond.append(f"{alias}.{'end_ts' if span else 'ts'} >= ?")
+            args.append(w.start)
+        if w.end is not None:
+            cond.append(f"{alias}.{'start_ts' if span else 'ts'} < ?")
+            args.append(w.end)
+        parts.append("(" + " AND ".join(cond) + ")")
+        params += args
+    return "(" + " OR ".join(parts) + ")", params
+
+
+def _windows_sql(window_sets: list[tuple[Window, ...]], alias: str, *, span: bool) -> tuple[str, list[Any]]:
+    """AND of every window set, as ``" AND (...)"`` ready to append to a WHERE clause ("" when none)."""
+    sql = ""
+    params: list[Any] = []
+    for windows in window_sets:
+        part, args = _window_sql(windows, alias, span=span)
+        sql += f" AND {part}"
+        params += args
+    return sql, params
+
+
+def _visible(window_sets: list[tuple[Window, ...]], instance_jid: str, ts: int, end: int | None = None) -> bool:
+    return all(access.window_allows(windows, instance_jid, ts, end) for windows in window_sets)
 
 
 class SearchService:
@@ -120,8 +164,9 @@ class SearchService:
         self._embedder: Embedder | None = None
         self._embedder_error: str | None = None
         self._embedder_failed_at = 0.0
-        self._chats_cache: tuple[float, list[dict[str, Any]]] | None = None
-        self._senders_cache: tuple[float, list[tuple[str, str]]] | None = None
+        self._chats_cache: dict[Any, tuple[float, list[dict[str, Any]]]] = {}
+        self._senders_cache: dict[Any, tuple[float, list[tuple[str, str]]]] = {}
+        self._labels_cache: tuple[float, dict[str, dict[str, Any]]] | None = None
 
     # -- plumbing ---------------------------------------------------------
 
@@ -173,17 +218,27 @@ class SearchService:
 
     # -- name resolution ----------------------------------------------------
 
+    def _scope_sets(self) -> list[tuple[Window, ...]]:
+        """The window set imposed by the caller's access scope (none when unrestricted)."""
+        scope = access.current_scope()
+        return [scope.windows] if scope.windows is not None else []
+
     def _chats(self, conn: sqlite3.Connection) -> list[dict[str, Any]]:
+        sets = self._scope_sets()
+        key = tuple(sets[0]) if sets else None
         now = time.monotonic()
-        if self._chats_cache and now - self._chats_cache[0] < CACHE_TTL_SECONDS:
-            return self._chats_cache[1]
+        cached = self._chats_cache.get(key)
+        if cached and now - cached[0] < CACHE_TTL_SECONDS:
+            return cached[1]
+        where, params = _windows_sql(sets, "c", span=True)
         rows = conn.execute(
-            "SELECT chat_jid, chat_name, is_group, MAX(start_ts) FROM chunks GROUP BY chat_jid"
+            f"SELECT chat_jid, chat_name, is_group, MAX(start_ts) FROM chunks c WHERE 1 = 1{where} GROUP BY chat_jid",
+            params,
         ).fetchall()
         chats = [
             {"jid": r[0], "name": r[1] or r[0].split("@")[0], "is_group": bool(r[2]), "last_ts": r[3]} for r in rows
         ]
-        self._chats_cache = (now, chats)
+        self._chats_cache[key] = (now, chats)
         return chats
 
     def resolve_chat(self, conn: sqlite3.Connection, chat: str) -> dict[str, Any]:
@@ -217,12 +272,18 @@ class SearchService:
         raise SearchError(f"'{chat}' matches {len(candidates)} chats. Pass the JID of one of them: {listing}")
 
     def _senders(self, conn: sqlite3.Connection) -> list[tuple[str, str]]:
+        sets = self._scope_sets()
+        key = tuple(sets[0]) if sets else None
         now = time.monotonic()
-        if self._senders_cache and now - self._senders_cache[0] < CACHE_TTL_SECONDS:
-            return self._senders_cache[1]
-        rows = conn.execute("SELECT DISTINCT sender_jid, sender_name FROM messages_idx").fetchall()
+        cached = self._senders_cache.get(key)
+        if cached and now - cached[0] < CACHE_TTL_SECONDS:
+            return cached[1]
+        where, params = _windows_sql(sets, "m", span=False)
+        rows = conn.execute(
+            f"SELECT DISTINCT sender_jid, sender_name FROM messages_idx m WHERE 1 = 1{where}", params
+        ).fetchall()
         senders = [(r[0] or "", r[1] or "") for r in rows]
-        self._senders_cache = (now, senders)
+        self._senders_cache[key] = (now, senders)
         return senders
 
     def resolve_sender(self, conn: sqlite3.Connection, sender: str) -> tuple[list[str], list[str]]:
@@ -263,6 +324,9 @@ class SearchService:
         if filters.ts_to is not None:
             sql.append("AND m.ts <= ?")
             params.append(filters.ts_to)
+        window_sql, window_params = _windows_sql(filters.window_sets, "m", span=False)
+        sql.append(window_sql.lstrip())
+        params += window_params
         sql.append("ORDER BY bm25(messages_fts) LIMIT ?")
         params.append(self._k_fts)
         return [(r[0], r[1]) for r in conn.execute(" ".join(sql), params)]
@@ -283,7 +347,8 @@ class SearchService:
 
         from sqlite_vec import serialize_float32
 
-        k = self._k_vec * 3 if sender_names else self._k_vec
+        # The vector index cannot filter by number, so a restricted search looks further and filters after.
+        k = self._k_vec * (3 if sender_names else 1) * (8 if filters.window_sets else 1)
         sql = [f"SELECT chunk_id, distance FROM {VEC_TABLE} WHERE embedding MATCH ? AND k = ?"]
         params: list[Any] = [serialize_float32(embedder.embed_query(query)), k]
         if filters.chat_jids:
@@ -301,7 +366,8 @@ class SearchService:
 
         rowids = [h[0] for h in hits]
         rows = conn.execute(
-            f"SELECT rowid, chunk_id, end_ts, senders FROM chunks WHERE rowid IN ({_marks(rowids)})", rowids
+            f"SELECT rowid, chunk_id, end_ts, senders, instance_jid, start_ts FROM chunks WHERE rowid IN ({_marks(rowids)})",
+            rowids,
         ).fetchall()
         info = {r[0]: r for r in rows}
 
@@ -315,6 +381,8 @@ class SearchService:
             if similarity < self._min_similarity:
                 continue
             if filters.ts_from is not None and row[2] < filters.ts_from:
+                continue
+            if not _visible(filters.window_sets, row[4], row[5], row[2]):
                 continue
             if wanted_names and not wanted_names.intersection(json.loads(row[3])):
                 continue
@@ -332,8 +400,16 @@ class SearchService:
         date_to: str | None = None,
         mode: SearchMode = "hybrid",
         limit: int = DEFAULT_LIMIT,
+        department_id: int | None = None,
+        employee_id: int | None = None,
+        instance_jid: str | None = None,
     ) -> dict[str, Any]:
-        """Search the index. See the ``search_messages`` tool for the meaning of each argument."""
+        """Search the index. See the ``search_messages`` tool for the meaning of each argument.
+
+        ``department_id``, ``employee_id`` and ``instance_jid`` restrict the search to the numbers
+        those people or departments operated (for the periods they operated them) or to one number.
+        The caller's access scope applies on top of them and can never be widened by them.
+        """
         if not query or not query.strip():
             raise SearchError("query must not be empty")
         if mode not in ("hybrid", "keyword", "semantic"):
@@ -342,7 +418,8 @@ class SearchService:
 
         conn = self._connect()
         try:
-            filters = _Filters()
+            filters = _Filters(window_sets=self._scope_sets())
+            self._add_organization_filters(filters, department_id, employee_id, instance_jid)
             scope_chat: dict[str, Any] | None = None
             sender_names: list[str] = []
             if chat:
@@ -377,9 +454,15 @@ class SearchService:
                     logger.warning("search: semantic path skipped: %s", exc)
                     notes.append(f"Semantic search unavailable ({exc}); showing keyword matches only.")
 
-            results = self._fuse_and_build(conn, keyword_hits, semantic_hits, limit, notes)
+            results = self._fuse_and_build(conn, keyword_hits, semantic_hits, limit, notes, filters)
             coverage = self._coverage(conn, filters, scope_chat, notes)
             response: dict[str, Any] = {"results": results, "coverage": coverage}
+            if department_id is not None or employee_id is not None or instance_jid:
+                response["organization_filter"] = {
+                    "department_id": department_id,
+                    "employee_id": employee_id,
+                    "instance_jid": instance_jid,
+                }
             if filters.any:
                 response["filters"] = {
                     "chat": scope_chat and {"jid": scope_chat["jid"], "name": scope_chat["name"]},
@@ -391,6 +474,60 @@ class SearchService:
         finally:
             conn.close()
 
+    def _add_organization_filters(
+        self, filters: _Filters, department_id: int | None, employee_id: int | None, instance_jid: str | None
+    ) -> None:
+        if instance_jid:
+            filters.window_sets.append((Window(instance_jid),))
+        if department_id is None and employee_id is None:
+            return
+        if not self._messages_db_path:
+            raise SearchError("Filtering by department or employee needs the bridge database (messages.db).")
+        try:
+            windows = access.windows_for(
+                self._messages_db_path,
+                employees=[employee_id] if employee_id is not None else [],
+                departments=[department_id] if department_id is not None else [],
+            )
+        except access.PolicyError as exc:
+            raise SearchError(f"The organization data needed for this filter is not available: {exc}") from exc
+        if employee_id is not None and department_id is not None:
+            # Both given: the person must belong to the department, so require both sets.
+            employee_windows = access.windows_for(self._messages_db_path, employees=[employee_id])
+            filters.window_sets.append(employee_windows)
+            filters.window_sets.append(access.windows_for(self._messages_db_path, departments=[department_id]))
+            return
+        filters.window_sets.append(windows)
+
+    def _instance_labels(self) -> dict[str, dict[str, Any]]:
+        """Alias, current holder and department of each number, for labelling results."""
+        now = time.monotonic()
+        if self._labels_cache and now - self._labels_cache[0] < CACHE_TTL_SECONDS:
+            return self._labels_cache[1]
+        labels: dict[str, dict[str, Any]] = {}
+        if self._messages_db_path:
+            try:
+                conn = sqlite3.connect(f"file:{self._messages_db_path}?mode=ro", uri=True)
+                try:
+                    rows = conn.execute(
+                        """
+                        SELECT i.phone_jid, i.alias, e.name, d.name FROM instances i
+                        LEFT JOIN employees e ON e.id = i.employee_id
+                        LEFT JOIN departments d ON d.id = e.department_id
+                        WHERE i.phone_jid IS NOT NULL
+                        """
+                    ).fetchall()
+                finally:
+                    conn.close()
+                labels = {
+                    r[0]: {k: v for k, v in {"alias": r[1], "employee": r[2], "department": r[3]}.items() if v}
+                    for r in rows
+                }
+            except sqlite3.Error:
+                labels = {}  # an older bridge without organization tables: results just carry the JID
+        self._labels_cache = (now, labels)
+        return labels
+
     def _fuse_and_build(
         self,
         conn: sqlite3.Connection,
@@ -398,6 +535,7 @@ class SearchService:
         semantic_hits: list[tuple[str, float]],
         limit: int,
         notes: list[str],
+        filters: _Filters | None = None,
     ) -> list[dict[str, Any]]:
         scores: dict[str, float] = {}
         matched_by: dict[str, list[str]] = {}
@@ -423,7 +561,7 @@ class SearchService:
         chunk_rows = {
             r[0]: r
             for r in conn.execute(
-                "SELECT chunk_id, chat_jid, chat_name, is_group, start_ts, end_ts, message_ids "
+                "SELECT chunk_id, chat_jid, chat_name, is_group, start_ts, end_ts, message_ids, instance_jid "
                 f"FROM chunks WHERE chunk_id IN ({_marks(ranked)})",
                 ranked,
             )
@@ -435,7 +573,16 @@ class SearchService:
             row = chunk_rows.get(chunk_id)
             if row is None:
                 continue
-            messages = self._chunk_messages(conn, row[1], json.loads(row[6]), keyword_messages.get(chunk_id, set()))
+            messages = self._chunk_messages(
+                conn,
+                row[1],
+                json.loads(row[6]),
+                keyword_messages.get(chunk_id, set()),
+                row[7],
+                filters.window_sets if filters else [],
+            )
+            if not messages:
+                continue  # every message of this excerpt is outside the caller's scope
             size = sum(len(m["text"]) + 80 for m in messages)
             if results and size > budget:
                 notes.append("Output was cut to fit the size limit; narrow the search or lower the limit.")
@@ -448,18 +595,30 @@ class SearchService:
                 "matched_by": matched_by[chunk_id],
                 "messages": messages,
             }
+            if row[7]:
+                result["number"] = {"instance_jid": row[7], **self._instance_labels().get(row[7], {})}
             if chunk_id in similarity:
                 result["similarity"] = round(similarity[chunk_id], 3)
             results.append(result)
         return results
 
     def _chunk_messages(
-        self, conn: sqlite3.Connection, chat_jid: str, message_ids: list[str], keyword_ids: set[str]
+        self,
+        conn: sqlite3.Connection,
+        chat_jid: str,
+        message_ids: list[str],
+        keyword_ids: set[str],
+        instance_jid: str = "",
+        window_sets: list[tuple[Window, ...]] | None = None,
     ) -> list[dict[str, Any]]:
+        # An excerpt can span a change of hands or a period the caller may not see: only messages
+        # inside the caller's windows leave here.
+        window_sql, window_params = _windows_sql(window_sets or [], "m", span=False)
         rows = conn.execute(
-            "SELECT message_id, ts, sender_jid, sender_name, from_me, text FROM messages_idx "
-            "WHERE chat_jid = ? AND message_id IN (SELECT value FROM json_each(?)) ORDER BY ts, message_id",
-            (chat_jid, json.dumps(message_ids)),
+            "SELECT message_id, ts, sender_jid, sender_name, from_me, text FROM messages_idx m "
+            "WHERE instance_jid = ? AND chat_jid = ? AND message_id IN (SELECT value FROM json_each(?))"
+            f"{window_sql} ORDER BY ts, message_id",
+            (instance_jid, chat_jid, json.dumps(message_ids), *window_params),
         ).fetchall()
         out = []
         for message_id, ts, sender_jid, sender_name, from_me, text in rows:
@@ -480,20 +639,23 @@ class SearchService:
 
     # -- coverage and status -----------------------------------------------------
 
-    def _span(self, conn: sqlite3.Connection, chat_jid: str | None) -> tuple[int | None, int | None]:
+    def _span(
+        self, conn: sqlite3.Connection, chat_jid: str | None, window_sets: list[tuple[Window, ...]] | None = None
+    ) -> tuple[int | None, int | None]:
+        where, params = _windows_sql(window_sets if window_sets is not None else self._scope_sets(), "c", span=True)
         if chat_jid:
-            row = conn.execute(
-                "SELECT MIN(start_ts), MAX(end_ts) FROM chunks WHERE chat_jid = ?", (chat_jid,)
-            ).fetchone()
-        else:
-            row = conn.execute("SELECT MIN(start_ts), MAX(end_ts) FROM chunks").fetchone()
+            where += " AND c.chat_jid = ?"
+            params.append(chat_jid)
+        row = conn.execute(f"SELECT MIN(start_ts), MAX(end_ts) FROM chunks c WHERE 1 = 1{where}", params).fetchone()
         return row[0], row[1]
 
     def _coverage(
         self, conn: sqlite3.Connection, filters: _Filters, scope_chat: dict[str, Any] | None, notes: list[str]
     ) -> dict[str, Any]:
-        oldest, newest = self._span(conn, scope_chat["jid"] if scope_chat else None)
+        oldest, newest = self._span(conn, scope_chat["jid"] if scope_chat else None, filters.window_sets)
         text = ["Results are limited to the history synced to this index."]
+        if filters.window_sets:
+            text.append("Only conversations of the numbers and periods in scope are searched.")
         pending = self._pending_embeddings(conn)
         if pending:
             text.append(f"{pending} chunks are still waiting for embeddings, so semantic matches may be incomplete.")
@@ -510,17 +672,27 @@ class SearchService:
         return conn.execute("SELECT COUNT(*) FROM chunks WHERE embedded = 0").fetchone()[0]
 
     def status(self, chat: str | None = None) -> dict[str, Any]:
-        """Health of the index: what is indexed, what is still pending, and which model embeds it."""
+        """Health of the index: what is indexed, what is still pending, and which model embeds it.
+
+        Counts cover only what the caller's access scope allows.
+        """
         conn = self._connect()
         try:
+            sets = self._scope_sets()
+            where_m, params_m = _windows_sql(sets, "m", span=False)
+            where_c, params_c = _windows_sql(sets, "c", span=True)
             meta = dict(conn.execute("SELECT key, value FROM meta").fetchall())
             oldest, newest = self._span(conn, None)
-            chunks_total = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+            chunks_total = conn.execute(f"SELECT COUNT(*) FROM chunks c WHERE 1 = 1{where_c}", params_c).fetchone()[0]
             has_vectors = bool(conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (VEC_TABLE,)).fetchone())
-            pending_embeddings = conn.execute("SELECT COUNT(*) FROM chunks WHERE embedded = 0").fetchone()[0]
+            pending_embeddings = conn.execute(
+                f"SELECT COUNT(*) FROM chunks c WHERE c.embedded = 0{where_c}", params_c
+            ).fetchone()[0]
             status: dict[str, Any] = {
                 "index": {
-                    "messages_indexed": conn.execute("SELECT COUNT(*) FROM messages_idx").fetchone()[0],
+                    "messages_indexed": conn.execute(
+                        f"SELECT COUNT(*) FROM messages_idx m WHERE 1 = 1{where_m}", params_m
+                    ).fetchone()[0],
                     "chunks": chunks_total,
                     "chunks_awaiting_embedding": pending_embeddings if has_vectors else chunks_total,
                     "oldest": self._date(oldest) if oldest is not None else None,
@@ -533,7 +705,7 @@ class SearchService:
                     "semantic_search_ready": has_vectors and pending_embeddings < chunks_total,
                 },
             }
-            if self._messages_db_path:
+            if self._messages_db_path and not sets:
                 try:
                     cursor = int(meta.get("source_cursor") or 0)
                     status["source"] = {
@@ -549,10 +721,10 @@ class SearchService:
                     "name": found["name"],
                     "is_group": found["is_group"],
                     "messages_indexed": conn.execute(
-                        "SELECT COUNT(*) FROM messages_idx WHERE chat_jid = ?", (found["jid"],)
+                        f"SELECT COUNT(*) FROM messages_idx m WHERE m.chat_jid = ?{where_m}", (found["jid"], *params_m)
                     ).fetchone()[0],
                     "chunks": conn.execute(
-                        "SELECT COUNT(*) FROM chunks WHERE chat_jid = ?", (found["jid"],)
+                        f"SELECT COUNT(*) FROM chunks c WHERE c.chat_jid = ?{where_c}", (found["jid"], *params_c)
                     ).fetchone()[0],
                     "oldest": self._date(first) if first is not None else None,
                     "newest": self._date(last) if last is not None else None,

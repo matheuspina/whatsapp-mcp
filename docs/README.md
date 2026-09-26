@@ -11,6 +11,7 @@
 | [Webhooks](webhooks.md) | Real-time message webhooks: triggers, matching, signatures, retries |
 | [Database](database.md) | SQLite schema, what is and is not captured |
 | [Migrations](migrations.md) | Running schema migrations on an existing installation |
+| [Governance](governance.md) | Several numbers, people and departments, audit trail, access policy for AI clients, corporate attestation, LGPD |
 | [Search](search.md) | Local hybrid search: the indexer, chunking, local embeddings, and the `search_messages` / `index_status` tools |
 | [Response design](response-design.md) | Why tool responses carry raw data instead of interpretation |
 

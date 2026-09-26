@@ -5,6 +5,7 @@ pass explicit database paths so this module has no import-time dependency
 on the bridge store being present (keeps it testable against fixtures).
 """
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -42,6 +43,37 @@ def _connect_readonly(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     conn.execute("PRAGMA busy_timeout = 5000")
     return conn
+
+
+@dataclass(frozen=True)
+class PrivacyEvent:
+    """An anonymization or retention action recorded by the bridge."""
+
+    id: int
+    action: str
+    details: dict
+
+
+def fetch_privacy_events(messages_db_path: str, after_id: int) -> list[PrivacyEvent]:
+    """Privacy log entries newer than after_id. Empty when the bridge has not created the log yet."""
+    conn = _connect_readonly(messages_db_path)
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT id, action, details FROM privacy_log WHERE id > ? ORDER BY id ASC", (after_id,)
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []  # an older bridge: no privacy log
+    finally:
+        conn.close()
+    events = []
+    for event_id, action, details in rows:
+        try:
+            parsed = json.loads(details) if details else {}
+        except ValueError:
+            parsed = {}
+        events.append(PrivacyEvent(id=event_id, action=action, details=parsed if isinstance(parsed, dict) else {}))
+    return events
 
 
 def should_index_chat(chat_jid: str) -> bool:

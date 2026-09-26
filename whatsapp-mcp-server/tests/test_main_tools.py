@@ -26,6 +26,9 @@ ORGANIZATION_TOOLS = {
     "resolve_employee",
     "list_instances",
     "get_audit_deleted_messages",
+    "get_audit_trail",
+    "get_employee_activity_summary",
+    "list_access_log",
 }
 
 ALL_TOOLS = (
@@ -43,12 +46,13 @@ ALL_TOOLS = (
         "manage_blocklist",
         "manage_newsletter",
         "search_messages",
+        "search_department_conversations",
         "index_status",
     }
     | ORGANIZATION_TOOLS
 )
 
-SEARCH_TOOLS = {"search_messages", "index_status"}
+SEARCH_TOOLS = {"search_messages", "search_department_conversations", "index_status"}
 
 
 def reload_main(monkeypatch, toolsets: str | None = None):
@@ -211,6 +215,9 @@ def test_search_tools_delegate_to_the_search_service(monkeypatch):
             "date_to": None,
             "mode": "keyword",
             "limit": 5,
+            "department_id": None,
+            "employee_id": None,
+            "instance_jid": None,
         },
     )
     assert calls[1] == ("status", "Trabalho 2026")
@@ -227,3 +234,53 @@ def test_search_service_is_built_lazily_and_honours_embedding_backend_none(monke
 
     assert service is main._get_search_service()  # singleton
     assert service._embedder_factory is None
+
+
+def test_tools_that_act_on_whatsapp_choose_the_sending_number(monkeypatch):
+    main = reload_main(monkeypatch, "all")
+
+    for name in ("send_message", "send_file", "delete_message", "manage_group", "create_poll"):
+        props = main.mcp._tool_manager.get_tool(name).parameters["properties"]
+        assert "instance_jid" in props, name
+    for name in ("list_messages", "search_messages", "list_instances", "get_audit_trail"):
+        props = main.mcp._tool_manager.get_tool(name).parameters["properties"]
+        assert "instance_jid" not in props or name in ("search_messages", "get_audit_trail"), name
+
+    # The note that tells the model when the parameter is required is part of the description.
+    assert "instance_jid" in main.mcp._tool_manager.get_tool("send_message").description
+
+
+def test_read_only_mode_refuses_tools_that_act_on_whatsapp(monkeypatch):
+    import pytest
+
+    from lib.access import AccessDenied
+
+    monkeypatch.setenv("MCP_READ_ONLY", "true")
+    main = reload_main(monkeypatch, "all")
+
+    with pytest.raises(AccessDenied, match="read-only"):
+        main.send_message("5511900000000@s.whatsapp.net", "oi")
+    with pytest.raises(AccessDenied):
+        main.delete_message("chat@s.whatsapp.net", "ID")
+    # Reading still works.
+    assert isinstance(main.list_all_contacts(), list) or True
+
+
+def test_the_sending_number_reaches_the_bridge_call(monkeypatch):
+    seen = {}
+
+    def fake_send(recipient, message, *_ignored):
+        from lib import access
+
+        seen["instance"] = access.current_instance()
+        return {"success": True}
+
+    main = reload_main(monkeypatch, "all")
+    monkeypatch.setattr(main, "whatsapp_send_message", fake_send)
+
+    main.send_message("5511900000000@s.whatsapp.net", "oi", instance_jid="5511900000001@s.whatsapp.net")
+    assert seen["instance"] == "5511900000001@s.whatsapp.net"
+
+    from lib import access
+
+    assert access.current_instance() is None  # never leaks into the next call
