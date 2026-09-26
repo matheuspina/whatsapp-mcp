@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
 	"whatsapp-bridge/internal/types"
 )
@@ -232,16 +233,18 @@ func (store *MessageStore) DeleteWebhookTrigger(id int) error {
 	return err
 }
 
-// StoreWebhookLog stores a webhook delivery log
+// StoreWebhookLog stores a webhook delivery log via the writer queue
 func (store *MessageStore) StoreWebhookLog(log *types.WebhookLog) error {
-	_, err := store.db.Exec(
-		`INSERT INTO webhook_logs (webhook_config_id, message_id, chat_jid, trigger_type, trigger_value, 
-		 payload, response_status, response_body, attempt_count, delivered_at) 
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		log.WebhookConfigID, log.MessageID, log.ChatJID, log.TriggerType, log.TriggerValue,
-		log.Payload, log.ResponseStatus, log.ResponseBody, log.AttemptCount, log.DeliveredAt,
-	)
-	return err
+	return store.enqueueWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(
+			`INSERT INTO webhook_logs (webhook_config_id, message_id, chat_jid, trigger_type, trigger_value, 
+			 payload, response_status, response_body, attempt_count, delivered_at) 
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			log.WebhookConfigID, log.MessageID, log.ChatJID, log.TriggerType, log.TriggerValue,
+			log.Payload, log.ResponseStatus, log.ResponseBody, log.AttemptCount, log.DeliveredAt,
+		)
+		return err
+	}, false, true)
 }
 
 // GetWebhookLogs retrieves webhook logs with optional filtering

@@ -9,27 +9,58 @@ import (
 	"whatsapp-bridge/internal/types"
 )
 
-// StoreChat stores a chat in the database
-func (store *MessageStore) StoreChat(jid, name string, lastMessageTime time.Time) error {
-	_, err := store.db.Exec(
-		`INSERT INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)
-		ON CONFLICT(jid) DO UPDATE SET
-			name = CASE
-				WHEN excluded.name != '' THEN excluded.name
-				ELSE chats.name
-			END,
-			last_message_time = CASE
-				WHEN chats.last_message_time IS NULL OR excluded.last_message_time > chats.last_message_time THEN excluded.last_message_time
-				ELSE chats.last_message_time
-			END`,
-		jid, name, lastMessageTime,
-	)
-	return err
+// StoreChatWithInstance stores a chat with instance association via the writer queue
+func (store *MessageStore) StoreChatWithInstance(jid, name string, lastMessageTime time.Time, instanceJID string) error {
+	return store.enqueueWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(
+			`INSERT INTO chats (jid, name, last_message_time, instance_jid) VALUES (?, ?, ?, ?)
+			ON CONFLICT(jid) DO UPDATE SET
+				name = CASE
+					WHEN excluded.name != '' THEN excluded.name
+					ELSE chats.name
+				END,
+				last_message_time = CASE
+					WHEN chats.last_message_time IS NULL OR excluded.last_message_time > chats.last_message_time THEN excluded.last_message_time
+					ELSE chats.last_message_time
+				END,
+				instance_jid = CASE
+					WHEN excluded.instance_jid != '' THEN excluded.instance_jid
+					ELSE chats.instance_jid
+				END`,
+			jid, name, lastMessageTime, instanceJID,
+		)
+		return err
+	}, false, true)
 }
 
-// StoreMessage stores a message in the database
+// StoreChat stores a chat in the database via the writer queue
+func (store *MessageStore) StoreChat(jid, name string, lastMessageTime time.Time) error {
+	return store.StoreChatWithInstance(jid, name, lastMessageTime, "")
+}
+
+// StoreMessageWithInstance stores a message with its instance association
+func (store *MessageStore) StoreMessageWithInstance(id, chatJID, sender, senderName, content string, timestamp time.Time, isFromMe bool,
+	mediaType, filename, url, directPath string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64, instanceJID string, isBulk bool) error {
+	return store.storeMessageWithPriority(id, chatJID, sender, senderName, content, timestamp, isFromMe,
+		mediaType, filename, url, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength, instanceJID, isBulk)
+}
+
+// StoreMessage stores a message in the database via the writer queue
 func (store *MessageStore) StoreMessage(id, chatJID, sender, senderName, content string, timestamp time.Time, isFromMe bool,
 	mediaType, filename, url, directPath string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64) error {
+	return store.storeMessageWithPriority(id, chatJID, sender, senderName, content, timestamp, isFromMe,
+		mediaType, filename, url, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength, "", false)
+}
+
+// StoreMessageBulk stores a message in the database via the bulk writer queue (for history sync)
+func (store *MessageStore) StoreMessageBulk(id, chatJID, sender, senderName, content string, timestamp time.Time, isFromMe bool,
+	mediaType, filename, url, directPath string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64) error {
+	return store.storeMessageWithPriority(id, chatJID, sender, senderName, content, timestamp, isFromMe,
+		mediaType, filename, url, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength, "", true)
+}
+
+func (store *MessageStore) storeMessageWithPriority(id, chatJID, sender, senderName, content string, timestamp time.Time, isFromMe bool,
+	mediaType, filename, url, directPath string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64, instanceJID string, isBulk bool) error {
 	// Only store if there's actual content or media
 	if content == "" && mediaType == "" {
 		return nil
@@ -40,13 +71,15 @@ func (store *MessageStore) StoreMessage(id, chatJID, sender, senderName, content
 		senderName = sender
 	}
 
-	_, err := store.db.Exec(
-		`INSERT OR REPLACE INTO messages
-		(id, chat_jid, sender, sender_name, content, timestamp, is_from_me, media_type, filename, url, direct_path, media_key, file_sha256, file_enc_sha256, file_length)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, chatJID, sender, senderName, content, timestamp, isFromMe, mediaType, filename, url, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength,
-	)
-	return err
+	return store.enqueueWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(
+			`INSERT OR REPLACE INTO messages
+			(id, chat_jid, sender, sender_name, content, timestamp, is_from_me, media_type, filename, url, direct_path, media_key, file_sha256, file_enc_sha256, file_length, instance_jid)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, chatJID, sender, senderName, content, timestamp, isFromMe, mediaType, filename, url, directPath, mediaKey, fileSHA256, fileEncSHA256, fileLength, instanceJID,
+		)
+		return err
+	}, isBulk, true)
 }
 
 // GetMessageMedia retrieves media metadata for a single message.

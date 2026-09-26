@@ -56,13 +56,15 @@ type Message struct {
 	IsFirstMessageToday     bool           `json:"is_first_message_today,omitempty"`
 	HasReactions            bool           `json:"has_reactions,omitempty"`
 	MessagePositionInThread int            `json:"message_position_in_thread,omitempty"`
-	IsGroup                 bool           `json:"is_group,omitempty"`
 	IsRead                  bool           `json:"is_read,omitempty"`
+	InstanceJID             string         `json:"instance_jid,omitempty"`
+	IsDeletedRemote         bool           `json:"is_deleted_remote,omitempty"`
 }
 
 // Chat represents a WhatsApp chat/conversation
 type Chat struct {
 	JID                      string           `json:"jid,omitempty"`
+	InstanceJID             string           `json:"instance_jid,omitempty"`
 	Name                     string           `json:"name,omitempty"`
 	IsGroup                  bool             `json:"is_group,omitempty"`
 	LastMessageTime          time.Time        `json:"last_message_time,omitempty"`
@@ -530,4 +532,40 @@ type SyncStatusResponse struct {
 	ConversationCount int      `json:"conversation_count"`
 	Error             string   `json:"error,omitempty"`
 	Recommendations   []string `json:"recommendations,omitempty"`
+}
+
+// Department represents a business sector (e.g. Comercial, Financeiro, Compras)
+type Department struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// Employee represents a person/collaborator within the organization
+type Employee struct {
+	ID             int       `json:"id"`
+	DepartmentID   *int      `json:"department_id,omitempty"`
+	DepartmentName string    `json:"department_name,omitempty"`
+	Name           string    `json:"name"`
+	Role           string    `json:"role,omitempty"`
+	Email          string    `json:"email,omitempty"`
+	Active         bool      `json:"active"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// Instance represents a WhatsApp account/connection belonging to a collaborator
+type Instance struct {
+	ID           int        `json:"id"`
+	PhoneJID     string     `json:"phone_jid"`
+	EmployeeID   *int       `json:"employee_id,omitempty"`
+	EmployeeName string     `json:"employee_name,omitempty"`
+	Alias        string     `json:"alias,omitempty"`
+	Status       string     `json:"status"` // "connected", "pairing", "disconnected"
+	PairedAt     *time.Time `json:"paired_at,omitempty"`
+	LastSeenAt   *time.Time `json:"last_seen_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }

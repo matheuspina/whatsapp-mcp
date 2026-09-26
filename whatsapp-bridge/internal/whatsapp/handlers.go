@@ -266,8 +266,7 @@ func (c *Client) HandleHistorySync(messageStore *database.MessageStore, historyS
 
 				// For history sync, use sender as senderName fallback (PushName not directly available)
 				senderName := sender
-
-				err = messageStore.StoreMessage(
+				err = messageStore.StoreMessageBulk(
 					msgID,
 					chatJID,
 					sender,
