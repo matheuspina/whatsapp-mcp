@@ -82,15 +82,15 @@ export default function Home() {
           cta="Configurar Webhooks"
           variant="outline"
         >
-          Configure endpoints externos para receber notificações instantâneas com filtros por palavra-chave ou remetente.
+          Configure avisos automáticos para receber novas mensagens em outro sistema, com filtros por palavra-chave ou remetente.
         </FeatureCard>
 
         <FeatureCard
           icon={Plug}
-          title="Clientes MCP & IA"
+          title="Assistentes de IA"
           description="Integração Claude & Cursor"
           href="/mcp-clients"
-          cta="Ver Configurações"
+          cta="Conectar assistente"
           variant="outline"
         >
           Conecte ferramentas de IA como Claude Desktop, Cursor e agentes locais para consultar histórico e contexto.

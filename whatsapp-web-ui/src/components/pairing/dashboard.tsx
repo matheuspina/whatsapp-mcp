@@ -16,7 +16,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onOpenSettings }: DashboardProps) {
-  const { jid, reset } = usePairing();
+  const { reset } = usePairing();
   const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
   const [connStatus, setConnStatus] = useState<ConnectionStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,35 +95,35 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
           {isConnected ? (
             <>
               <CheckCircle className="h-6 w-6 text-success" />
-              Connected
+              Conectado
             </>
           ) : hasReconnectErrors ? (
             <>
               <Loader2 className="h-6 w-6 text-warning animate-spin" />
-              Reconnecting...
+              Reconectando...
             </>
           ) : (
             <>
               <XCircle className="h-6 w-6 text-destructive" />
-              Disconnected
+              Desconectado
             </>
           )}
         </CardTitle>
-        <CardDescription className="font-mono text-xs break-all">{jid}</CardDescription>
+        <CardDescription>Seu WhatsApp está conectado a este painel.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Connection details when disconnected */}
         {isDisconnected && (
-          <Notice variant={hasReconnectErrors ? "warning" : "destructive"} icon={WifiOff} title="Connection Lost">
+          <Notice variant={hasReconnectErrors ? "warning" : "destructive"} icon={WifiOff} title="Conexão perdida">
             <div className="text-sm text-muted-foreground space-y-1">
               {connStatus?.disconnected_for && (
-                <p>Disconnected for: <span className="font-mono font-medium text-foreground">{connStatus.disconnected_for}</span></p>
+                <p>Desconectado há <span className="font-medium text-foreground">{connStatus.disconnected_for}</span></p>
               )}
               {connStatus?.last_connected && (
-                <p>Last connected: <span className="font-mono text-foreground">{new Date(connStatus.last_connected).toLocaleString()}</span></p>
+                <p>Última conexão: <span className="text-foreground">{new Date(connStatus.last_connected).toLocaleString()}</span></p>
               )}
               {hasReconnectErrors && (
-                <p>Reconnect attempts: <span className="font-mono text-foreground">{connStatus?.auto_reconnect_errors}</span></p>
+                <p>Tentativas de reconexão: <span className="text-foreground">{connStatus?.auto_reconnect_errors}</span></p>
               )}
             </div>
           </Notice>
@@ -132,9 +132,9 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
         {/* Uptime when connected */}
         {isConnected && connStatus?.uptime && (
           <div className="text-center text-sm text-muted-foreground">
-            Uptime: <span className="font-mono">{connStatus.uptime}</span>
+            Conectado há <span>{connStatus.uptime}</span>
             {connStatus.last_connected && (
-              <> &middot; Connected since: <span className="font-mono">{new Date(connStatus.last_connected).toLocaleTimeString()}</span></>
+              <> &middot; desde <span>{new Date(connStatus.last_connected).toLocaleTimeString()}</span></>
             )}
           </div>
         )}
@@ -142,34 +142,34 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
         <StatGrid columns={2}>
           <StatCard
             icon={syncStatus?.syncing ? <Loader2 className="animate-spin text-warning" /> : <CheckCircle className="text-success" />}
-            label="Sync Status"
-            value={syncStatus?.syncing ? "Syncing" : "Synced"}
+            label="Sincronização"
+            value={syncStatus?.syncing ? "Em andamento" : "Concluída"}
           >
             {syncStatus && <Progress value={syncStatus.sync_progress} className="mt-2 h-2" />}
           </StatCard>
 
           <StatCard
             icon={<Clock className="text-muted-foreground" />}
-            label="Last Sync"
+            label="Última sincronização"
             large={false}
-            value={syncStatus?.last_sync ? new Date(syncStatus.last_sync).toLocaleString() : "In progress..."}
+            value={syncStatus?.last_sync ? new Date(syncStatus.last_sync).toLocaleString() : "Em andamento..."}
           />
 
           <StatCard
             icon={<MessageSquare className="text-muted-foreground" />}
-            label="Messages"
+            label="Mensagens"
             value={syncStatus?.message_count?.toLocaleString() || "0"}
           />
 
           <StatCard
             icon={<MessageSquare className="text-muted-foreground" />}
-            label="Chats"
+            label="Conversas"
             value={syncStatus?.conversation_count?.toLocaleString() || "0"}
           />
         </StatGrid>
 
         {syncStatus?.recommendations && syncStatus.recommendations.length > 0 && (
-          <Notice variant="warning" icon={AlertTriangle} title="Recommendations">
+          <Notice variant="warning" icon={AlertTriangle} title="Recomendações">
             <ul className="text-sm text-muted-foreground space-y-1">
               {syncStatus.recommendations.map((rec, i) => (
                 <li key={i} className="flex items-start gap-2">
@@ -182,7 +182,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
         )}
 
         {syncStatus?.error && (
-          <Notice variant="destructive" icon={AlertTriangle} title="Error">
+          <Notice variant="destructive" icon={AlertTriangle} title="Erro">
             <p className="text-sm text-muted-foreground">{syncStatus.error}</p>
           </Notice>
         )}
@@ -193,20 +193,20 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
           {isDisconnected && (
             <Button variant="destructive" size="sm" onClick={handleReconnect} disabled={reconnecting}>
               <Zap className={"h-4 w-4 mr-2 " + (reconnecting ? "animate-pulse" : "")} />
-              {reconnecting ? "Reconnecting..." : "Force Reconnect"}
+              {reconnecting ? "Reconectando..." : "Reconectar agora"}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
             <RefreshCw className={"h-4 w-4 mr-2 " + (loading ? "animate-spin" : "")} />
-            Refresh
+            Atualizar
           </Button>
           <Button variant="outline" size="sm" onClick={onOpenSettings}>
             <Settings className="h-4 w-4 mr-2" />
-            Settings
+            Configurações
           </Button>
           <Button variant="outline" size="sm" onClick={reset}>
             <Plus className="h-4 w-4 mr-2" />
-            New Device
+            Novo aparelho
           </Button>
         </div>
       </CardContent>

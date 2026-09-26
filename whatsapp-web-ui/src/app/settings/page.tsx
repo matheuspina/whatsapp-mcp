@@ -27,22 +27,20 @@ export default function SettingsPage() {
 
   return (
     <PageContainer size="narrow">
-        <PageHeader title="Settings" description="Account, sessions, media storage and appearance" />
+        <PageHeader title="Configurações" description="Conta, acessos, arquivos e aparência" />
 
         <Card>
           <CardHeader>
-            <CardTitle>Account</CardTitle>
-            <CardDescription>
-              Sign-in credentials are set on the server (WEB_UI_USERNAME / WEB_UI_PASSWORD in .env).
-            </CardDescription>
+            <CardTitle>Conta</CardTitle>
+            <CardDescription>Gerencie seu acesso ao painel.</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-between">
             <div className="text-sm">
-              Signed in as <span className="font-medium">{username}</span>
+              Acesso atual: <span className="font-medium">{username}</span>
             </div>
             <Button variant="outline" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
-              Sign out
+              Sair
             </Button>
           </CardContent>
         </Card>
@@ -53,14 +51,14 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Appearance</CardTitle>
-            <CardDescription>Customize the look and feel</CardDescription>
+            <CardTitle>Aparência</CardTitle>
+            <CardDescription>Escolha como o painel será exibido</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="darkMode">Dark Mode</Label>
-                <p className="text-sm text-muted-foreground">Enable dark theme for the interface</p>
+                <Label htmlFor="darkMode">Modo escuro</Label>
+                <p className="text-sm text-muted-foreground">Usar o tema escuro no painel</p>
               </div>
               <Switch id="darkMode" checked={darkMode} onCheckedChange={setDarkMode} />
             </div>

@@ -69,11 +69,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (unreachable) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
-        <p className="font-medium">Cannot reach the WhatsApp bridge</p>
-        <p className="text-sm text-muted-foreground">Check that the containers are running, then try again.</p>
+        <p className="font-medium">Não foi possível carregar o painel</p>
+        <p className="text-sm text-muted-foreground">Verifique sua conexão e tente novamente.</p>
         <Button variant="outline" onClick={() => setAttempt((n) => n + 1)}>
           <RefreshCw className="mr-2 h-4 w-4" />
-          Retry
+          Tentar novamente
         </Button>
       </div>
     );
@@ -81,7 +81,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (status === "checking") {
     return (
-      <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center text-muted-foreground">Carregando...</div>
     );
   }
 
@@ -90,12 +90,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const getPageTitle = (path: string) => {
     const p = path.replace(/\/+$/, "");
-    if (!p) return "Overview";
-    if (p.startsWith("/pairing")) return "Device Pairing";
+    if (!p) return "Visão geral";
+    if (p.startsWith("/pairing")) return "Conectar aparelho";
     if (p.startsWith("/webhooks")) return "Webhooks";
-    if (p.startsWith("/mcp-clients")) return "MCP Clients";
-    if (p.startsWith("/settings")) return "Settings";
-    return "Dashboard";
+    if (p.startsWith("/mcp-clients")) return "Assistente de IA";
+    if (p.startsWith("/settings")) return "Configurações";
+    return "Painel";
   };
 
   return (

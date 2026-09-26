@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/layout/page";
 import { StatCard, StatGrid } from "@/components/common/stat-card";
 import { CodeBlock } from "@/components/mcp/code-block";
+import { ClientIcon } from "@/components/mcp/client-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,11 +38,11 @@ import {
 import { MCP_TOOL_GROUPS, MCP_TOOLS, type McpToolGroup } from "@/lib/mcp-tools";
 import { cn } from "@/lib/utils";
 
-/** The MCP server is published on port 8081 of the host that serves the panel. */
+/** The public MCP route follows the same address used to open the panel. */
 function guessMcpUrl(): string {
   if (typeof window === "undefined") return DEFAULT_MCP_URL;
   const { protocol, hostname } = window.location;
-  return isLocalUrl(window.location.href) ? DEFAULT_MCP_URL : `${protocol}//${hostname}:8081/mcp`;
+  return `${protocol}//${hostname}/mcp`;
 }
 
 type McpTab = "install" | "tools";
@@ -95,37 +96,37 @@ export default function McpPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Servidor MCP"
-        description="Configure uma conexão para seu cliente MCP e consulte as ferramentas disponíveis para o WhatsApp."
+        title="Conectar assistente de IA"
+        description="Use o endereço abaixo para conectar seu assistente ao WhatsApp."
       />
 
       <StatGrid columns={4}>
         <StatCard
           icon={<Server />}
-          label="Protocolo"
-          value="MCP HTTP"
-          description="FastMCP Python 3.12"
+          label="Conexão"
+          value="Pronta"
+          description="Pronta para conectar"
           large={false}
         />
         <StatCard
           icon={localUrl ? <Globe className="text-muted-foreground" /> : <Cloud className="text-success" />}
-          label="Endpoint"
-          value={localUrl ? "Local" : "Externo"}
-          description={localUrl ? "Acessível nesta máquina" : "Compatível com clientes cloud"}
+          label="Acesso"
+          value={localUrl ? "Neste computador" : "Pela internet"}
+          description={localUrl ? "Use em aplicativos locais" : "Use em aplicativos online"}
           large={false}
         />
         <StatCard
           icon={<Layers className="text-sky-600 dark:text-sky-400" />}
-          label="Clientes"
+          label="Aplicativos"
           value={clients.length}
-          description="editores, CLIs e cloud"
+          description="compatíveis para conectar"
           large={false}
         />
         <StatCard
           icon={<Cpu className="text-emerald-600 dark:text-emerald-400" />}
-          label="Tools"
+          label="Ferramentas"
           value={MCP_TOOLS.length}
-          description="disponíveis no servidor"
+          description="disponíveis para o assistente"
           large={false}
         />
       </StatGrid>
@@ -136,14 +137,14 @@ export default function McpPage() {
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="mcp-url" className="text-xs font-medium">
-                  URL do servidor MCP
+                  Endereço para conectar
                 </Label>
                 {localUrl ? (
-                  <span className="text-[11px] text-muted-foreground">endpoint local</span>
+                  <span className="text-[11px] text-muted-foreground">endereço local</span>
                 ) : (
                   <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
                     <Globe className="size-3" />
-                    endpoint externo
+                    acesso pela internet
                   </span>
                 )}
               </div>
@@ -197,11 +198,11 @@ export default function McpPage() {
           </div>
           {!url ? (
             <p className="mt-2 text-xs font-medium text-destructive">
-              Informe uma URL HTTP ou HTTPS válida, como http://localhost:8081/mcp.
+              Informe um endereço válido, como https://seu-dominio/mcp.
             </p>
           ) : (
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Para clientes cloud, use uma URL pública HTTPS definida por <code>MCP_PUBLIC_URL</code>.
+              Para aplicativos online, use um endereço público com HTTPS. O endereço acima já é preenchido automaticamente quando o painel está publicado.
             </p>
           )}
         </CardContent>
@@ -215,11 +216,11 @@ export default function McpPage() {
         <TabsList className="h-10 w-full justify-start sm:w-fit">
           <TabsTrigger value="install" className="gap-2 px-4 text-xs sm:text-sm">
             <Terminal className="size-3.5" />
-            Conectar cliente
+            Conectar assistente
           </TabsTrigger>
           <TabsTrigger value="tools" className="gap-2 px-4 text-xs sm:text-sm">
             <Code2 className="size-3.5" />
-            Tools disponíveis
+            Ferramentas disponíveis
             <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
               {MCP_TOOLS.length}
             </Badge>
@@ -238,34 +239,47 @@ export default function McpPage() {
                 </div>
                 <div className="w-full space-y-1.5 sm:w-56">
                   <Label htmlFor="mcp-client" className="text-[11px] text-muted-foreground">
-                    Cliente MCP
+                    Aplicativo
                   </Label>
-                  <Select value={selectedClient?.id} onValueChange={setSelectedClientId} disabled={!url}>
-                    <SelectTrigger id="mcp-client" className="h-9 w-full text-xs">
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/50">
+                      <ClientIcon id={selectedClient?.id ?? "other"} className="size-4" />
+                    </div>
+                    <Select value={selectedClient?.id} onValueChange={setSelectedClientId} disabled={!url}>
+                      <SelectTrigger id="mcp-client" className="h-9 min-w-0 flex-1 text-xs">
+                        <SelectValue placeholder="Selecione um cliente" />
+                      </SelectTrigger>
                     <SelectContent>
                       {clients.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
-                          {client.name}
+                          <span className="flex items-center gap-2">
+                            <ClientIcon id={client.id} className="size-3.5" />
+                            <span>{client.name}</span>
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
-                  </Select>
+                    </Select>
+                  </div>
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-5 pt-5">
                 {!url || !selectedClient ? (
                   <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    Informe uma URL válida para gerar a configuração de instalação.
+                    Informe um endereço válido para continuar.
                   </div>
                 ) : (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-sm font-semibold">{selectedClient.name}</h2>
-                      <span className="text-xs text-muted-foreground">{selectedClient.kind}</span>
-                      {selectedClient.cloud && <Badge variant="outline">Cloud</Badge>}
+                      <div className="flex size-8 items-center justify-center rounded-md border bg-muted/50">
+                        <ClientIcon id={selectedClient.id} className="size-4" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-semibold">{selectedClient.name}</h2>
+                        <span className="text-xs text-muted-foreground">{selectedClient.kind}</span>
+                      </div>
+                      {selectedClient.cloud && <Badge variant="outline">Online</Badge>}
                       {selectedClient.deepLink && (
                         <Button asChild size="sm" className="ml-auto h-8 gap-1.5 text-xs">
                           <a href={selectedClient.deepLink}>
@@ -280,7 +294,7 @@ export default function McpPage() {
                       <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
                         <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
                         <span>
-                          Este cliente acessa o servidor pela internet. Troque o endpoint local por uma URL pública HTTPS antes de configurar.
+                          Este aplicativo acessa o WhatsApp pela internet. Use um endereço público com HTTPS antes de continuar.
                         </span>
                       </div>
                     )}
@@ -325,29 +339,27 @@ export default function McpPage() {
               <div className="rounded-lg border bg-card p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <Server className="size-4 text-primary" />
-                  <h2 className="text-sm font-semibold">Sobre a conexão</h2>
+                  <h2 className="text-sm font-semibold">Como usar</h2>
                 </div>
                 <dl className="space-y-3 text-xs">
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted-foreground">Transporte</dt>
-                    <dd className="font-medium">HTTP</dd>
+                    <dt className="text-muted-foreground">1. Copie o endereço</dt>
+                    <dd className="font-medium">Acima</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted-foreground">Autenticação</dt>
-                    <dd className="font-medium">OAuth / sessão</dd>
+                    <dt className="text-muted-foreground">2. Escolha o aplicativo</dt>
+                    <dd className="font-medium">Ao lado</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted-foreground">Servidor</dt>
-                    <dd className="font-medium">whatsapp</dd>
+                    <dt className="text-muted-foreground">3. Autorize o acesso</dt>
+                    <dd className="font-medium">Quando solicitado</dd>
                   </div>
                 </dl>
               </div>
 
               <div className="rounded-lg border bg-muted/20 p-4 text-xs leading-relaxed text-muted-foreground">
-                <p className="font-medium text-foreground">Acesso seguro</p>
-                <p className="mt-1.5">
-                  O cliente deverá autenticar na primeira conexão. A URL e as credenciais não são armazenadas no navegador.
-                </p>
+                <p className="font-medium text-foreground">Dica</p>
+                <p className="mt-1.5">Depois de conectar, o aplicativo poderá consultar as informações permitidas da sua conta.</p>
               </div>
             </div>
           </div>
@@ -357,9 +369,9 @@ export default function McpPage() {
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-base font-semibold">Tools disponíveis</h2>
+                <h2 className="text-base font-semibold">Ferramentas disponíveis</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Catálogo de operações expostas pelo servidor MCP. Esta tela apenas documenta as tools.
+                  Veja as ações que o assistente pode realizar no WhatsApp.
                 </p>
               </div>
               <div className="relative w-full sm:w-64">
@@ -367,7 +379,7 @@ export default function McpPage() {
                 <Input
                   value={toolSearch}
                   onChange={(event) => setToolSearch(event.target.value)}
-                  placeholder="Buscar tool..."
+                  placeholder="Buscar ferramenta..."
                   className="h-8 pl-8 pr-8 text-xs"
                 />
                 {toolSearch && (
@@ -404,7 +416,7 @@ export default function McpPage() {
 
             {filteredToolsByGroup.length === 0 ? (
               <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                Nenhuma tool corresponde à busca atual.
+                Nenhuma ferramenta corresponde à busca atual.
               </div>
             ) : (
               <Card className="overflow-hidden border-border/80 shadow-sm">
@@ -441,8 +453,7 @@ function ToolGroupSection({
         {tools.map((tool) => (
           <div key={tool.name} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <code className="text-xs font-medium text-foreground">{tool.name}</code>
-              <p className="mt-1 text-xs text-muted-foreground">{tool.description}</p>
+              <p className="text-xs font-medium text-foreground">{tool.description}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <Badge variant={tool.readOnly ? "success" : "outline"} className="text-[10px]">

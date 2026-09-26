@@ -96,7 +96,7 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Conexões & IA",
+    label: "Integrações",
     items: [
       {
         title: "Números WhatsApp",
@@ -108,13 +108,13 @@ const navGroups: NavGroup[] = [
         title: "Webhooks",
         href: "/webhooks",
         icon: Webhook,
-        description: "Endpoints de disparo",
+        description: "Envio automático de mensagens",
       },
       {
-        title: "Clientes MCP",
+        title: "Assistentes de IA",
         href: "/mcp-clients",
         icon: Plug,
-        description: "Integração com Claude, Cursor, etc.",
+        description: "Conecte Claude, Cursor e outros",
       },
     ],
   },
@@ -236,11 +236,11 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
             <SidebarMenuButton
               asChild
               isActive={pathname === "/settings" || pathname.startsWith("/settings/")}
-              tooltip="Settings"
+              tooltip="Configurações"
             >
               <Link href="/settings">
                 <Settings />
-                <span>Settings</span>
+                <span>Configurações</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -256,7 +256,7 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
                     <User className="size-4" />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">{username || "User"}</span>
+                    <span className="truncate font-semibold">{username || "Usuário"}</span>
                     <span className="truncate text-xs text-muted-foreground flex items-center gap-1.5">
                       <span className={cn("inline-block size-1.5 rounded-full", dotColor)} />
                       {statusLabel}
@@ -277,7 +277,7 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
                       <User className="size-4" />
                     </div>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{username || "User"}</span>
+                        <span className="truncate font-semibold">{username || "Usuário"}</span>
                       <span className="truncate text-xs text-muted-foreground flex items-center gap-1.5">
                         <span className={cn("inline-block size-1.5 rounded-full", dotColor)} />
                         {statusLabel}
@@ -289,7 +289,7 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
                 <DropdownMenuItem asChild>
                   <Link href="/settings" className="cursor-pointer">
                     <Settings className="mr-2 size-4" />
-                    Settings
+                    Configurações
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -298,7 +298,7 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 size-4" />
-                  Sign out
+                  Sair
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

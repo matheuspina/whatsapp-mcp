@@ -19,18 +19,18 @@ interface TriggerBuilderProps {
 }
 
 const triggerTypes = [
-  { value: "all", label: "All Messages" },
-  { value: "chat_jid", label: "Specific Chat" },
-  { value: "instance_jid", label: "Specific Number" },
-  { value: "sender", label: "Specific Sender" },
-  { value: "keyword", label: "Keyword" },
-  { value: "media_type", label: "Media Type" },
+  { value: "all", label: "Todas as mensagens" },
+  { value: "chat_jid", label: "Conversa específica" },
+  { value: "instance_jid", label: "Número específico" },
+  { value: "sender", label: "Remetente específico" },
+  { value: "keyword", label: "Palavra-chave" },
+  { value: "media_type", label: "Tipo de arquivo" },
 ] as const;
 
 const matchTypes = [
-  { value: "exact", label: "Exact" },
-  { value: "contains", label: "Contains" },
-  { value: "regex", label: "Regex" },
+  { value: "exact", label: "Exatamente igual" },
+  { value: "contains", label: "Contém" },
+  { value: "regex", label: "Padrão avançado" },
 ] as const;
 
 export function TriggerBuilder({ triggers, onChange }: TriggerBuilderProps) {
@@ -60,10 +60,10 @@ export function TriggerBuilder({ triggers, onChange }: TriggerBuilderProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <Label>Triggers</Label>
+        <Label>Quando enviar</Label>
         <Button type="button" variant="outline" size="sm" onClick={addTrigger}>
           <Plus className="h-3 w-3 mr-1" />
-          Add Trigger
+          Adicionar condição
         </Button>
       </div>
 
@@ -75,7 +75,7 @@ export function TriggerBuilder({ triggers, onChange }: TriggerBuilderProps) {
               onValueChange={(v) => updateTrigger(index, "trigger_type", v)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Type" />
+                <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
                 {triggerTypes.map((type) => (
@@ -87,7 +87,7 @@ export function TriggerBuilder({ triggers, onChange }: TriggerBuilderProps) {
             </Select>
 
             <Input
-              placeholder={trigger.trigger_type === "all" ? "No value needed" : "Value"}
+              placeholder={trigger.trigger_type === "all" ? "Não precisa preencher" : "Digite o valor"}
               value={trigger.trigger_value}
               onChange={(e) => updateTrigger(index, "trigger_value", e.target.value)}
               disabled={trigger.trigger_type === "all"}
@@ -98,7 +98,7 @@ export function TriggerBuilder({ triggers, onChange }: TriggerBuilderProps) {
               onValueChange={(v) => updateTrigger(index, "match_type", v)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Match" />
+                <SelectValue placeholder="Comparação" />
               </SelectTrigger>
               <SelectContent>
                 {matchTypes.map((type) => (

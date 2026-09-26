@@ -120,7 +120,7 @@ export function MediaStorage() {
       const next = await new WhatsAppAPI().saveMediaStorage(payload());
       setStatus(next);
       setForm(formFrom(next)); // clears the typed secret; the server keeps it
-      toast.success(next.active ? "Media storage is on" : "Settings saved");
+      toast.success(next.active ? "Armazenamento de arquivos ativado" : "Configurações salvas");
     } catch (error) {
       setResult({ ok: false, text: describe(error) });
     } finally {
@@ -144,7 +144,7 @@ export function MediaStorage() {
     setBusy("retry");
     try {
       const n = await new WhatsAppAPI().retryFailedMedia();
-      toast.success(n > 0 ? `${n} files back in the queue` : "Nothing to retry");
+      toast.success(n > 0 ? `${n} arquivo(s) voltaram para a fila` : "Nenhum arquivo para tentar novamente");
       refresh();
     } catch (error) {
       toast.error(getErrorMessage(error).title, { description: getErrorMessage(error).description });
@@ -159,21 +159,20 @@ export function MediaStorage() {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-1.5">
             <CardTitle className="flex flex-wrap items-center gap-2">
-              Media storage
+              Armazenamento de arquivos
               {status && (
-                <Badge variant={status.active ? "default" : "secondary"}>{status.active ? "Uploading" : "Off"}</Badge>
+                <Badge variant={status.active ? "default" : "secondary"}>{status.active ? "Ativo" : "Desativado"}</Badge>
               )}
-              {managedByEnv && <Badge variant="outline">Set by environment</Badge>}
+              {managedByEnv && <Badge variant="outline">Gerenciado pelo administrador</Badge>}
             </CardTitle>
             <CardDescription>
-              Photos, videos, audio and documents are saved on the server first, then uploaded in the background to
-              your bucket (Cloudflare R2, Amazon S3, MinIO or any S3-compatible service), organized by department,
-              employee, number and conversation.
+              Fotos, vídeos, áudios e documentos podem ser enviados automaticamente para um armazenamento externo,
+              organizados por setor, colaborador, número e conversa.
             </CardDescription>
           </div>
           <Button variant="outline" size="sm" className="shrink-0" onClick={refresh} disabled={loading}>
             <RefreshCw className={"mr-2 h-4 w-4 " + (loading ? "animate-spin" : "")} />
-            Refresh
+            Atualizar
           </Button>
         </div>
       </CardHeader>
@@ -182,34 +181,33 @@ export function MediaStorage() {
         {status === null && loading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
 
         {managedByEnv && (
-          <Notice variant="warning" icon={TriangleAlert} title="Configured by environment variables">
+          <Notice variant="warning" icon={TriangleAlert} title="Configuração gerenciada pelo administrador">
             <p className="text-sm text-muted-foreground">
-              The S3_* variables in the server environment (.env) take priority, so this form is read-only. Remove
-              S3_BUCKET from the environment to edit the settings here.
+              Estas configurações são controladas pelo administrador e não podem ser alteradas nesta tela.
             </p>
           </Notice>
         )}
         {status?.warning && (
-          <Notice variant="warning" icon={TriangleAlert} title="Saved credentials cannot be used">
-            <p className="text-sm text-muted-foreground">{status.warning}. Enter the secret access key again and save.</p>
+          <Notice variant="warning" icon={TriangleAlert} title="É preciso atualizar o acesso">
+            <p className="text-sm text-muted-foreground">{status.warning}. Informe novamente a chave secreta e salve.</p>
           </Notice>
         )}
         {status?.last_error && (
-          <Notice variant="destructive" icon={TriangleAlert} title="Last upload error">
+          <Notice variant="destructive" icon={TriangleAlert} title="Erro no último envio">
             <p className="break-words text-sm text-muted-foreground">{status.last_error}</p>
           </Notice>
         )}
 
         {status && (
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm" aria-label="Upload queue">
-            <Counter label="Uploaded" value={queue.uploaded} />
-            <Counter label="Waiting" value={queue.pending_upload} />
-            <Counter label="Uploading" value={queue.uploading} />
-            <Counter label="Local only" value={queue.local} />
-            <Counter label="Failed" value={queue.failed} tone={queue.failed ? "destructive" : undefined} />
+            <Counter label="Enviados" value={queue.uploaded} />
+            <Counter label="Aguardando" value={queue.pending_upload} />
+            <Counter label="Enviando" value={queue.uploading} />
+            <Counter label="Somente neste painel" value={queue.local} />
+            <Counter label="Com erro" value={queue.failed} tone={queue.failed ? "destructive" : undefined} />
             {(queue.failed ?? 0) > 0 && status.active && (
               <Button variant="link" size="sm" className="h-auto p-0" onClick={retry} disabled={busy !== null}>
-                Retry failed
+                Tentar novamente
               </Button>
             )}
           </div>
@@ -217,9 +215,9 @@ export function MediaStorage() {
 
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-0.5">
-            <Label htmlFor="ms-enabled">Upload media to object storage</Label>
+          <Label htmlFor="ms-enabled">Enviar arquivos para armazenamento externo</Label>
             <p className="text-sm text-muted-foreground">
-              Off, media stays in the server&apos;s local store folder. Turning it on also uploads what is already there.
+              Desativado, os arquivos ficam apenas no armazenamento local. Ao ativar, os arquivos existentes também serão enviados.
             </p>
           </div>
           <Switch
@@ -231,7 +229,7 @@ export function MediaStorage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="ms-endpoint" label="Endpoint" hint="Cloudflare R2: https://<account id>.r2.cloudflarestorage.com. Leave empty for Amazon S3.">
+          <Field id="ms-endpoint" label="Endereço do serviço" hint="Deixe em branco se usar Amazon S3.">
             <Input
               id="ms-endpoint"
               value={form.endpoint}
@@ -241,7 +239,7 @@ export function MediaStorage() {
               autoComplete="off"
             />
           </Field>
-          <Field id="ms-region" label="Region" hint='"auto" for Cloudflare R2, e.g. "us-east-1" for Amazon S3.'>
+          <Field id="ms-region" label="Região" hint='Use "auto" quando o serviço não informar uma região.'>
             <Input
               id="ms-region"
               value={form.region}
@@ -250,7 +248,7 @@ export function MediaStorage() {
               autoComplete="off"
             />
           </Field>
-          <Field id="ms-bucket" label="Bucket">
+          <Field id="ms-bucket" label="Nome do armazenamento">
             <Input
               id="ms-bucket"
               value={form.bucket}
@@ -260,7 +258,7 @@ export function MediaStorage() {
               autoComplete="off"
             />
           </Field>
-          <Field id="ms-prefix" label="Folder inside the bucket" hint="Optional. Everything is stored under it.">
+          <Field id="ms-prefix" label="Pasta" hint="Opcional. Os arquivos serão organizados dentro dela.">
             <Input
               id="ms-prefix"
               value={form.prefix}
@@ -270,7 +268,7 @@ export function MediaStorage() {
               autoComplete="off"
             />
           </Field>
-          <Field id="ms-access-key" label="Access key ID">
+          <Field id="ms-access-key" label="Chave de acesso">
             <Input
               id="ms-access-key"
               value={form.access_key_id}
@@ -281,8 +279,8 @@ export function MediaStorage() {
           </Field>
           <Field
             id="ms-secret"
-            label="Secret access key"
-            hint={status?.config.secret_set ? "Saved on the server. Leave blank to keep it." : "Stored encrypted on the server."}
+            label="Chave secreta"
+            hint={status?.config.secret_set ? "Já informada. Deixe em branco para mantê-la." : "Usada apenas para conectar ao serviço."}
           >
             <Input
               id="ms-secret"
@@ -299,10 +297,9 @@ export function MediaStorage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5">
-              <Label htmlFor="ms-keep-local">Keep a local copy after upload</Label>
+              <Label htmlFor="ms-keep-local">Manter uma cópia local</Label>
               <p className="text-sm text-muted-foreground">
-                Off frees disk space: once a file is in the bucket the local copy is deleted, and the bridge reads it
-                back from the bucket when needed.
+                Desativado, a cópia local é removida depois do envio para economizar espaço.
               </p>
             </div>
             <Switch
@@ -314,8 +311,8 @@ export function MediaStorage() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5">
-              <Label htmlFor="ms-path-style">Path-style addressing</Label>
-              <p className="text-sm text-muted-foreground">Needed by MinIO and some self-hosted services.</p>
+              <Label htmlFor="ms-path-style">Usar endereço compatível</Label>
+              <p className="text-sm text-muted-foreground">Ative apenas se o seu serviço solicitar.</p>
             </div>
             <Switch
               id="ms-path-style"
@@ -326,8 +323,8 @@ export function MediaStorage() {
           </div>
           <Field
             id="ms-public-url"
-            label="Public base URL"
-            hint="Only if the bucket is public or has a custom domain. Leave empty for a private bucket: links are then signed and expire."
+            label="Endereço público dos arquivos"
+            hint="Opcional. Preencha apenas se os arquivos tiverem um domínio público."
           >
             <Input
               id="ms-public-url"
@@ -350,11 +347,11 @@ export function MediaStorage() {
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={test} disabled={locked}>
               {busy === "test" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudUpload className="mr-2 h-4 w-4" />}
-              Test connection
+              Testar conexão
             </Button>
             <Button onClick={save} disabled={locked}>
               {busy === "save" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save
+              Salvar
             </Button>
           </div>
         )}

@@ -20,10 +20,10 @@ interface StatusInfo {
 }
 
 const statusConfigs: Record<PairingStatus, StatusInfo> = {
-  waiting: { icon: Loader2, text: "Waiting for phone...", color: "text-muted-foreground", animate: true },
-  success: { icon: CheckCircle, text: "Pairing successful!", color: "text-success", animate: false },
-  error: { icon: AlertCircle, text: "Pairing failed", color: "text-destructive", animate: false },
-  expired: { icon: AlertCircle, text: "Code expired", color: "text-destructive", animate: false },
+  waiting: { icon: Loader2, text: "Aguardando confirmação no celular...", color: "text-muted-foreground", animate: true },
+  success: { icon: CheckCircle, text: "Aparelho conectado", color: "text-success", animate: false },
+  error: { icon: AlertCircle, text: "Não foi possível conectar", color: "text-destructive", animate: false },
+  expired: { icon: AlertCircle, text: "O código expirou", color: "text-destructive", animate: false },
 };
 
 export function CodeDisplay() {
@@ -33,7 +33,7 @@ export function CodeDisplay() {
 
   const copyCode = () => {
     navigator.clipboard.writeText(pairingCode);
-    toast.success("Code copied to clipboard");
+    toast.success("Código copiado");
   };
 
   const checkStatus = useCallback(async () => {
@@ -47,13 +47,13 @@ export function CodeDisplay() {
         if (connStatus.jid) {
           setJid(connStatus.jid);
         }
-        toast.success("Pairing successful!", {
-          description: "Your device is now linked",
+        toast.success("Aparelho conectado", {
+          description: "Seu WhatsApp está pronto para uso",
         });
         setTimeout(() => setStep("dashboard"), 1500);
       } else if (result.error) {
         setStatus("error");
-        toast.error("Pairing failed", { description: result.error });
+        toast.error("Não foi possível conectar", { description: result.error });
       }
     } catch (error) {
       const msg = getErrorMessage(error);
@@ -88,8 +88,8 @@ export function CodeDisplay() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Enter This Code</CardTitle>
-        <CardDescription>On your phones WhatsApp app</CardDescription>
+        <CardTitle>Digite este código no celular</CardTitle>
+        <CardDescription>Abra o WhatsApp e siga os passos abaixo</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="relative">
@@ -113,7 +113,7 @@ export function CodeDisplay() {
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-muted-foreground" />
           <span className={countdown <= 30 ? "text-destructive font-medium" : "text-muted-foreground"}>
-            {countdown > 0 ? countdown + "s remaining" : "Expired"}
+            {countdown > 0 ? `Faltam ${countdown}s` : "Expirado"}
           </span>
         </div>
 
@@ -125,7 +125,7 @@ export function CodeDisplay() {
         <div className="border rounded-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <Smartphone className="h-5 w-5 text-success" />
-            <span className="font-medium">On Your Phone:</span>
+            <span className="font-medium">No seu celular:</span>
           </div>
 
           <Tabs defaultValue="android" className="w-full">
@@ -135,24 +135,24 @@ export function CodeDisplay() {
             </TabsList>
             <TabsContent value="android" className="mt-4">
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                <li>Open <strong className="text-foreground">WhatsApp</strong></li>
-                <li>Tap <strong className="text-foreground">Settings</strong> (or menu)</li>
-                <li>Tap <strong className="text-foreground">Linked devices</strong></li>
-                <li>Tap <strong className="text-foreground">Link a device</strong></li>
-                <li>Tap <strong className="text-foreground">Link with phone number</strong></li>
-                <li>Enter phone number, tap <strong className="text-foreground">Next</strong></li>
-                <li><Badge variant="secondary" className="font-mono">{pairingCode}</Badge> Enter code</li>
+                <li>Abra o <strong className="text-foreground">WhatsApp</strong></li>
+                <li>Toque em <strong className="text-foreground">Configurações</strong></li>
+                <li>Toque em <strong className="text-foreground">Aparelhos conectados</strong></li>
+                <li>Toque em <strong className="text-foreground">Conectar aparelho</strong></li>
+                <li>Escolha <strong className="text-foreground">Conectar com número de telefone</strong></li>
+                <li>Informe o número e toque em <strong className="text-foreground">Avançar</strong></li>
+                <li>Digite o código <Badge variant="secondary" className="font-mono">{pairingCode}</Badge></li>
               </ol>
             </TabsContent>
             <TabsContent value="ios" className="mt-4">
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                <li>Open <strong className="text-foreground">WhatsApp</strong></li>
-                <li>Tap <strong className="text-foreground">Settings</strong></li>
-                <li>Tap <strong className="text-foreground">Linked devices</strong></li>
-                <li>Tap <strong className="text-foreground">Link a device</strong></li>
-                <li>Tap <strong className="text-foreground">Link with phone number</strong></li>
-                <li>Enter phone number, tap <strong className="text-foreground">Next</strong></li>
-                <li><Badge variant="secondary" className="font-mono">{pairingCode}</Badge> Enter code</li>
+                <li>Abra o <strong className="text-foreground">WhatsApp</strong></li>
+                <li>Toque em <strong className="text-foreground">Configurações</strong></li>
+                <li>Toque em <strong className="text-foreground">Aparelhos conectados</strong></li>
+                <li>Toque em <strong className="text-foreground">Conectar aparelho</strong></li>
+                <li>Escolha <strong className="text-foreground">Conectar com número de telefone</strong></li>
+                <li>Informe o número e toque em <strong className="text-foreground">Avançar</strong></li>
+                <li>Digite o código <Badge variant="secondary" className="font-mono">{pairingCode}</Badge></li>
               </ol>
             </TabsContent>
           </Tabs>
@@ -160,7 +160,7 @@ export function CodeDisplay() {
 
         {status === "expired" && (
           <Button variant="outline" className="w-full" onClick={() => setStep("phone")}>
-            Generate New Code
+            Gerar novo código
           </Button>
         )}
       </CardContent>

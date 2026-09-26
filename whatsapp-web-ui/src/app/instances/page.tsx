@@ -340,7 +340,7 @@ export default function InstancesPage() {
     <PageContainer>
       <PageHeader
         title="Números WhatsApp"
-        description="Aparelhos conectados para monitoramento e auditoria em conformidade com as diretrizes corporativas."
+        description="Conecte e acompanhe os números de WhatsApp usados pela sua equipe."
         actions={
           <>
             <Popover>
@@ -356,11 +356,10 @@ export default function InstancesPage() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-3">
-                <p className="mb-2 text-xs font-semibold text-foreground">Monitoramento de aparelhos</p>
+                <p className="mb-2 text-xs font-semibold text-foreground">Sobre os aparelhos</p>
                 <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
-                  <p><strong className="text-foreground">Aparelho conectado:</strong> o número é emparelhado como sessão web e os eventos são registrados para auditoria.</p>
-                  <p><strong className="text-foreground">Somente leitura:</strong> o envio por automação fica desativado por padrão e pode ser liberado por aparelho.</p>
-                  <p><strong className="text-foreground">Validade:</strong> o WhatsApp pode desvincular sessões sem conexão por mais de 14 dias.</p>
+                  <p><strong className="text-foreground">Conectado:</strong> as mensagens ficam disponíveis para consulta e acompanhamento.</p>
+                  <p><strong className="text-foreground">Somente leitura:</strong> o envio de mensagens fica bloqueado até ser liberado.</p>
                 </div>
               </PopoverContent>
             </Popover>
@@ -409,7 +408,7 @@ export default function InstancesPage() {
                     : `${unconfirmed.length} números com termo corporativo pendente`}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  Números sem termo confirmado podem não registrar mensagens conforme políticas de compliance e LGPD.
+                  Confirme o termo corporativo para concluir o cadastro desses números.
                 </p>
               </div>
             </div>
@@ -1069,7 +1068,7 @@ export default function InstancesPage() {
                 Deseja realmente desconectar e remover o aparelho <strong>&ldquo;{removeTarget?.alias || removeTarget?.phone_number}&rdquo;</strong>?
               </p>
               <p className="text-xs text-muted-foreground">
-                A sessão será encerrada no WhatsApp. Todas as mensagens já capturadas e auditadas serão mantidas no banco de dados com segurança.
+                A conexão será encerrada no WhatsApp. As mensagens já capturadas continuarão disponíveis para consulta.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -88,7 +88,7 @@ export default function DepartmentsPage() {
       setEmployees(empData);
     } catch (err: unknown) {
       toast.error("Erro ao carregar setores", {
-        description: err instanceof Error ? err.message : "Falha na comunicação com o bridge",
+        description: err instanceof Error ? err.message : "Falha na comunicação com o serviço",
       });
     } finally {
       setLoading(false);
@@ -108,7 +108,7 @@ export default function DepartmentsPage() {
       .catch((err: unknown) => {
         if (!ignore) {
           toast.error("Erro ao carregar setores", {
-            description: err instanceof Error ? err.message : "Falha na comunicação com o bridge",
+            description: err instanceof Error ? err.message : "Falha na comunicação com o serviço",
           });
           setLoading(false);
         }
@@ -209,7 +209,7 @@ export default function DepartmentsPage() {
     <PageContainer>
       <PageHeader
         title="Setores & Departamentos"
-        description="Estruture a organização em departamentos para contexto semântico da IA, relatórios e governança de atendimento."
+        description="Organize a equipe por setores para facilitar o atendimento e os relatórios."
         actions={
           <Button onClick={openCreateDialog} className="gap-2 shadow-sm">
             <Plus className="size-4" />
@@ -505,7 +505,7 @@ export default function DepartmentsPage() {
               <DialogDescription>
                 {editingDept
                   ? "Atualize as informações do departamento."
-                  : "Defina o nome e a finalidade deste setor na governança de conversas."}
+                  : "Defina o nome e a finalidade deste setor."}
               </DialogDescription>
             </DialogHeader>
 

@@ -114,7 +114,7 @@ export default function EmployeesPage() {
       setInstances(instData);
     } catch (err: unknown) {
       toast.error("Erro ao carregar colaboradores", {
-        description: err instanceof Error ? err.message : "Falha na comunicação com o bridge",
+        description: err instanceof Error ? err.message : "Falha na comunicação com o serviço",
       });
     } finally {
       setLoading(false);
@@ -139,7 +139,7 @@ export default function EmployeesPage() {
       .catch((err: unknown) => {
         if (!ignore) {
           toast.error("Erro ao carregar colaboradores", {
-            description: err instanceof Error ? err.message : "Falha na comunicação com o bridge",
+            description: err instanceof Error ? err.message : "Falha na comunicação com o serviço",
           });
           setLoading(false);
         }
@@ -298,7 +298,7 @@ export default function EmployeesPage() {
     <PageContainer>
       <PageHeader
         title="Colaboradores"
-        description="Membros da equipe responsáveis por operar números WhatsApp e responder a chamados e clientes."
+        description="Cadastre as pessoas responsáveis pelos números e pelo atendimento aos clientes."
         actions={
           <Button onClick={openCreateDialog} className="gap-2 shadow-sm">
             <Plus className="size-4" />
@@ -775,7 +775,7 @@ export default function EmployeesPage() {
               <DialogDescription>
                 {editingEmp
                   ? "Atualize o cadastro do colaborador e suas atribuições."
-                  : "Cadastre um novo colaborador para vincular a aparelhos e setores."}
+                  : "Cadastre um novo colaborador para vinculá-lo a aparelhos e setores."}
               </DialogDescription>
             </DialogHeader>
 

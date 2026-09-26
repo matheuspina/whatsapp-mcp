@@ -719,7 +719,7 @@ export default function MessagesPage() {
         <Card className="p-12">
           <div className="flex flex-col items-center justify-center gap-3 text-center">
             <Loader2 className="size-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground font-medium">Buscando mensagens no banco de dados...</p>
+            <p className="text-sm text-muted-foreground font-medium">Buscando mensagens...</p>
           </div>
         </Card>
       ) : messages.length === 0 ? (

@@ -48,7 +48,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: "get_chat",
     group: "Consultas",
-    description: "Consulta os metadados de uma conversa pelo JID.",
+    description: "Consulta os detalhes de uma conversa.",
     readOnly: true,
   },
   {

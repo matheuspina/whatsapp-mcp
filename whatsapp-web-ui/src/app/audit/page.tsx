@@ -121,8 +121,7 @@ function AccessTab({ api }: { api: WhatsAppAPI }) {
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        Cada consulta a mensagens feita por um cliente de IA (ferramentas do MCP) ou por esta tela fica registrada.
-        Ferramentas que enviam mensagens registram só os nomes dos parâmetros, não o conteúdo.
+        As consultas às mensagens ficam registradas para facilitar o acompanhamento e a segurança da operação.
       </p>
       {entries.length === 0 ? (
         <Card>
@@ -208,10 +207,8 @@ function PrivacyTab({ api }: { api: WhatsAppAPI }) {
     <div className="space-y-4">
       <Notice variant="warning" icon={ShieldAlert} title="Operações irreversíveis">
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Anonimizar e apagar por prazo removem dados do banco e do índice de busca, e não podem ser desfeitos. O
-          backup do banco (<code>store/</code>) e cópias fora do sistema não são alcançados: trate-os pela política de
-          retenção de backups da empresa. Ao anonimizar, a conversa direta do titular passa a usar um identificador
-          fictício e suas mensagens em grupos perdem texto e nome.
+          Essas ações são permanentes e não podem ser desfeitas. Ao anonimizar, os dados da pessoa deixam de ser
+          identificáveis nas conversas.
         </p>
       </Notice>
 
@@ -226,7 +223,7 @@ function PrivacyTab({ api }: { api: WhatsAppAPI }) {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="privacy-subject">Telefone ou JID</Label>
+              <Label htmlFor="privacy-subject">Telefone ou identificador</Label>
               <Input
                 id="privacy-subject"
                 placeholder="5511999998888"
@@ -250,9 +247,7 @@ function PrivacyTab({ api }: { api: WhatsAppAPI }) {
               <Trash2 className="size-4" />
               Apagar mensagens antigas
             </CardTitle>
-            <CardDescription>
-              Retenção por prazo. Para rodar todo dia sem intervenção, defina <code>RETENTION_DAYS</code> na bridge.
-            </CardDescription>
+            <CardDescription>Apague mensagens antigas usando um prazo definido por você.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-1.5">
@@ -341,14 +336,6 @@ export default function AuditPage() {
         title="Auditoria"
         description="Mensagens apagadas, quem consultou os dados e o atendimento a pedidos de privacidade."
       />
-
-      <Notice variant="success" icon={ScrollText} title="Busca por significado">
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          A busca por palavras está em <strong>Mensagens</strong>. A busca semântica (por significado, filtrada por
-          setor ou colaborador) é feita pelos clientes de IA conectados ao servidor MCP, com{" "}
-          <code>search_messages</code> e <code>search_department_conversations</code>.
-        </p>
-      </Notice>
 
       <Tabs defaultValue="deleted">
         <TabsList>

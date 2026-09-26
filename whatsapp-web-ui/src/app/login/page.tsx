@@ -14,16 +14,16 @@ function loginErrorMessage(error: unknown): string {
   if (error instanceof APIError) {
     switch (error.status) {
       case 401:
-        return "Invalid username or password.";
+        return "Usuário ou senha inválidos.";
       case 429:
-        return "Too many failed attempts. Wait a few minutes and try again.";
+        return "Muitas tentativas sem sucesso. Aguarde alguns minutos e tente novamente.";
       case 501:
-        return "Login is not configured on the server (WEB_UI_USERNAME / WEB_UI_PASSWORD).";
+        return "O acesso ainda não foi configurado. Fale com o administrador.";
       default:
         return error.message;
     }
   }
-  return "Cannot reach the WhatsApp bridge.";
+  return "Não foi possível conectar ao serviço. Tente novamente.";
 }
 
 export default function LoginPage() {
@@ -42,12 +42,12 @@ export default function LoginPage() {
 
     const trimmedUsername = username.trim();
     if (!trimmedUsername) {
-      setError("Please enter your username.");
+      setError("Informe seu usuário.");
       usernameRef.current?.focus();
       return;
     }
     if (!password) {
-      setError("Please enter your password.");
+      setError("Informe sua senha.");
       passwordRef.current?.focus();
       return;
     }
@@ -97,7 +97,7 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">Usuário</Label>
               <Input
                 ref={usernameRef}
                 id="username"
@@ -108,7 +108,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Senha</Label>
               <Input
                 ref={passwordRef}
                 id="password"
@@ -125,7 +125,7 @@ export default function LoginPage() {
             )}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
-              Sign in
+              Entrar
             </Button>
           </form>
         </CardContent>

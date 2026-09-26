@@ -1,8 +1,8 @@
 /** Name the server is registered under in every client. */
 export const MCP_SERVER_NAME = "whatsapp";
 
-/** Where the MCP server listens when the panel is opened on this machine (docker-compose publishes it on 8081). */
-export const DEFAULT_MCP_URL = "http://localhost:8081/mcp";
+/** Default address used by the public panel route. */
+export const DEFAULT_MCP_URL = "http://localhost/mcp";
 
 export type CodeLanguage = "bash" | "json" | "toml";
 
@@ -67,54 +67,53 @@ export function buildClients(url: string): McpClient[] {
     {
       id: "claude-code",
       name: "Claude Code",
-      kind: "Anthropic CLI",
+      kind: "Linha de comando",
       snippets: [
-        { label: "Add the server", language: "bash", code: `claude mcp add --transport http ${name} ${url}` },
+        { label: "Adicionar conexão", language: "bash", code: `claude mcp add --transport http ${name} ${url}` },
       ],
-      steps: ["Run the command in your terminal.", "Inside Claude Code, run /mcp and sign in if the server asks for it."],
+      steps: ["Execute o comando no terminal.", "No Claude Code, execute /mcp e faça login se for solicitado."],
     },
     {
       id: "claude",
       name: "Claude",
-      kind: "claude.ai, desktop and mobile",
+      kind: "Aplicativo web, desktop e celular",
       cloud: true,
       steps: [
-        "Open Settings → Connectors.",
-        "Choose Add custom connector.",
-        `Enter ${name} as the name and paste the URL above.`,
-        "Save, then sign in with your panel username and password when asked.",
+        "Abra Configurações → Conectores.",
+        "Escolha Adicionar conector personalizado.",
+        `Informe ${name} como nome e cole o endereço acima.`,
+        "Salve e faça login com seu usuário e senha quando for solicitado.",
       ],
       snippets: [
         {
-          label: "Claude Desktop with a local URL: add to claude_desktop_config.json",
+          label: "Claude Desktop: configuração para uso neste computador",
           language: "json",
           code: mcpRemote(remoteArgs),
         },
       ],
-      note: "Custom connectors are called from Anthropic's servers, so they need a public https URL (MCP_PUBLIC_URL). For a localhost URL, use the config file below, which runs on your machine.",
     },
     {
       id: "cursor",
       name: "Cursor",
-      kind: "AI code editor",
+      kind: "Editor de código com IA",
       deepLink: `cursor://anysphere.cursor-deeplink/mcp/install?name=${name}&config=${encodeURIComponent(toBase64(json({ url })))}`,
       snippets: [
-        { label: "Or add to ~/.cursor/mcp.json", language: "json", code: json({ mcpServers: { [name]: { url } } }) },
+        { label: "Ou adicione nas configurações do Cursor", language: "json", code: json({ mcpServers: { [name]: { url } } }) },
       ],
     },
     {
       id: "vscode",
       name: "VS Code",
-      kind: "GitHub Copilot agent mode",
+      kind: "Editor com assistente de IA",
       deepLink: `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name, type: "http", url }))}`,
       snippets: [
         {
-          label: "Or run in a terminal",
+          label: "Ou execute no terminal",
           language: "bash",
           code: `code --add-mcp '${JSON.stringify({ name, type: "http", url })}'`,
         },
         {
-          label: "Or add to .vscode/mcp.json",
+          label: "Ou adicione às configurações do VS Code",
           language: "json",
           code: json({ servers: { [name]: { type: "http", url } } }),
         },
@@ -123,26 +122,25 @@ export function buildClients(url: string): McpClient[] {
     {
       id: "chatgpt",
       name: "ChatGPT",
-      kind: "OpenAI",
+      kind: "Aplicativo de IA",
       cloud: true,
       steps: [
-        "Open Settings → Connectors → Advanced and turn on Developer mode.",
-        "Back in Connectors, choose Create.",
-        `Enter ${name} as the name, paste the URL above and pick OAuth for authentication.`,
-        "Create it and sign in with your panel username and password.",
+        "Abra Configurações → Conectores → Avançado e ative o modo de desenvolvedor.",
+        "Volte aos Conectores e escolha Criar.",
+        `Informe ${name} como nome, cole o endereço acima e escolha OAuth para autenticação.`,
+        "Crie a conexão e faça login com seu usuário e senha do painel.",
       ],
       snippets: [],
-      note: "ChatGPT calls the server from OpenAI's infrastructure, so it needs a public https URL (MCP_PUBLIC_URL). Menu names change between releases and plans.",
     },
     {
       id: "codex",
       name: "Codex",
-      kind: "OpenAI CLI and IDE extension",
+      kind: "Linha de comando e extensão para editor",
       snippets: [
-        { label: "Add the server", language: "bash", code: `codex mcp add ${name} --url ${url}` },
-        { label: "Sign in (when OAuth is on)", language: "bash", code: `codex mcp login ${name}` },
+        { label: "Adicionar conexão", language: "bash", code: `codex mcp add ${name} --url ${url}` },
+        { label: "Fazer login (se solicitado)", language: "bash", code: `codex mcp login ${name}` },
         {
-          label: "Or add to ~/.codex/config.toml",
+          label: "Ou adicione às configurações do Codex",
           language: "toml",
           code: `[mcp_servers.${name}]\nurl = "${url}"`,
         },
@@ -151,10 +149,10 @@ export function buildClients(url: string): McpClient[] {
     {
       id: "antigravity",
       name: "Antigravity",
-      kind: "Google agentic IDE",
+      kind: "Editor com assistente de IA",
       steps: [
-        "Open the agent panel, click the ... menu and choose MCP Servers → Manage MCP Servers → View raw config.",
-        "Add the entry below and save.",
+        "Abra o painel do agente, clique no menu ... e escolha MCP Servers → Manage MCP Servers → View raw config.",
+        "Adicione o item abaixo e salve.",
       ],
       snippets: [
         {
@@ -163,16 +161,15 @@ export function buildClients(url: string): McpClient[] {
           code: json({ mcpServers: { [name]: { serverUrl: url } } }),
         },
       ],
-      note: "Antigravity only reads serverUrl for remote servers; url and httpUrl are ignored.",
     },
     {
       id: "gemini-cli",
       name: "Gemini CLI",
-      kind: "Google CLI",
+      kind: "Linha de comando",
       snippets: [
-        { label: "Add the server", language: "bash", code: `gemini mcp add --transport http ${name} ${url}` },
+        { label: "Adicionar conexão", language: "bash", code: `gemini mcp add --transport http ${name} ${url}` },
         {
-          label: "Or add to ~/.gemini/settings.json",
+          label: "Ou adicione às configurações do Gemini",
           language: "json",
           code: json({ mcpServers: { [name]: { httpUrl: url } } }),
         },
@@ -181,10 +178,10 @@ export function buildClients(url: string): McpClient[] {
     {
       id: "windsurf",
       name: "Windsurf",
-      kind: "AI code editor",
+      kind: "Editor de código com IA",
       snippets: [
         {
-          label: "Add to ~/.codeium/windsurf/mcp_config.json",
+          label: "Adicionar às configurações do Windsurf",
           language: "json",
           code: json({ mcpServers: { [name]: { serverUrl: url } } }),
         },
@@ -193,11 +190,11 @@ export function buildClients(url: string): McpClient[] {
     {
       id: "grok",
       name: "Grok",
-      kind: "xAI API",
+      kind: "Serviço de IA",
       cloud: true,
       snippets: [
         {
-          label: "Responses API request",
+          label: "Solicitação de conexão",
           language: "bash",
           code: [
             "curl https://api.x.ai/v1/responses \\",
@@ -213,25 +210,23 @@ export function buildClients(url: string): McpClient[] {
           ].join("\n"),
         },
       ],
-      note: "Grok reaches MCP servers through the xAI API, from xAI's servers, so it needs a public https URL (MCP_PUBLIC_URL). The grok.com app has no custom connector option that we could confirm.",
     },
     {
       id: "other",
       name: "Other clients",
-      kind: "Any MCP client",
+      kind: "Outro aplicativo compatível",
       snippets: [
         {
-          label: "Clients that accept a URL",
+          label: "Aplicativos que aceitam um endereço",
           language: "json",
           code: json({ mcpServers: { [name]: { url } } }),
         },
         {
-          label: "Clients that only run local commands (stdio)",
+          label: "Aplicativos que usam comandos neste computador",
           language: "json",
           code: mcpRemote(remoteArgs),
         },
       ],
-      note: "Any client that follows the MCP authorization spec can sign in on its own once OAuth is on. Scripts can send API_KEY as a bearer token instead.",
     },
   ];
 }

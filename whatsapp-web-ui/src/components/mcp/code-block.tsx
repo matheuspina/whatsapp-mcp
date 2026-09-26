@@ -47,7 +47,7 @@ export function CodeBlock({ code, label, language, className }: CodeBlockProps) 
 
       <div className="relative rounded-lg border border-border/80 bg-zinc-950 text-zinc-100 shadow-sm overflow-hidden dark:bg-zinc-900/90">
         <div className="flex items-center justify-between border-b border-zinc-800/80 bg-zinc-900/60 px-3 py-1.5 text-[11px] font-mono text-zinc-400">
-          <span>snippet</span>
+          <span>instruções</span>
           <Button
             type="button"
             variant="ghost"

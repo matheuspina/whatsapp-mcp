@@ -64,16 +64,16 @@ export function WebhookForm({ open, onOpenChange, webhook, onSubmit, isLoading }
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = "Name is required";
+      newErrors.name = "Informe um nome";
     }
 
     if (!formData.webhook_url.trim()) {
-      newErrors.webhook_url = "URL is required";
+      newErrors.webhook_url = "Informe uma URL";
     } else {
       try {
         new URL(formData.webhook_url);
       } catch {
-        newErrors.webhook_url = "Invalid URL format";
+        newErrors.webhook_url = "Informe uma URL válida";
       }
     }
 
@@ -81,7 +81,7 @@ export function WebhookForm({ open, onOpenChange, webhook, onSubmit, isLoading }
       (t) => t.trigger_type === "all" || t.trigger_value.trim()
     );
     if (validTriggers.length === 0) {
-      newErrors.triggers = "At least one valid trigger is required";
+      newErrors.triggers = "Adicione pelo menos uma condição válida";
     }
 
     setErrors(newErrors);
@@ -99,18 +99,18 @@ export function WebhookForm({ open, onOpenChange, webhook, onSubmit, isLoading }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{webhook ? "Edit Webhook" : "Create Webhook"}</DialogTitle>
+          <DialogTitle>{webhook ? "Editar webhook" : "Criar webhook"}</DialogTitle>
           <DialogDescription>
-            {webhook ? "Update the webhook configuration" : "Configure a new webhook endpoint"}
+            {webhook ? "Atualize os dados deste webhook" : "Informe onde as mensagens devem ser entregues"}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">Nome</Label>
             <Input
               id="name"
-              placeholder="My Webhook"
+              placeholder="Ex.: Notificações de atendimento"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
@@ -118,7 +118,7 @@ export function WebhookForm({ open, onOpenChange, webhook, onSubmit, isLoading }
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="webhook_url">Webhook URL</Label>
+            <Label htmlFor="webhook_url">Endereço de destino</Label>
             <Input
               id="webhook_url"
               type="url"
@@ -130,11 +130,11 @@ export function WebhookForm({ open, onOpenChange, webhook, onSubmit, isLoading }
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="secret_token">Secret Token (optional)</Label>
+            <Label htmlFor="secret_token">Chave de segurança (opcional)</Label>
             <Input
               id="secret_token"
               type="password"
-              placeholder="Optional secret for verification"
+              placeholder="Usada para confirmar a origem do envio"
               value={formData.secret_token}
               onChange={(e) => setFormData({ ...formData, secret_token: e.target.value })}
             />
@@ -146,7 +146,7 @@ export function WebhookForm({ open, onOpenChange, webhook, onSubmit, isLoading }
               checked={formData.enabled}
               onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
             />
-            <Label htmlFor="enabled">Enabled</Label>
+            <Label htmlFor="enabled">Ativo</Label>
           </div>
 
           <TriggerBuilder
@@ -157,10 +157,10 @@ export function WebhookForm({ open, onOpenChange, webhook, onSubmit, isLoading }
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              Cancelar
             </Button>
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Saving..." : webhook ? "Update" : "Create"}
+              {isLoading ? "Salvando..." : webhook ? "Salvar alterações" : "Criar webhook"}
             </Button>
           </DialogFooter>
         </form>

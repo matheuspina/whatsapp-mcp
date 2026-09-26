@@ -86,10 +86,10 @@ export function WebhookList() {
       const api = new WhatsAppAPI();
       if (editingWebhook) {
         await api.updateWebhook(editingWebhook.id, data);
-        toast.success("Webhook updated");
+        toast.success("Webhook atualizado");
       } else {
         await api.createWebhook(data);
-        toast.success("Webhook created");
+        toast.success("Webhook criado");
       }
       setFormOpen(false);
       loadWebhooks();
@@ -105,7 +105,7 @@ export function WebhookList() {
     try {
       const api = new WhatsAppAPI();
       await api.toggleWebhook(id, enabled);
-      toast.success(enabled ? "Webhook enabled" : "Webhook disabled");
+      toast.success(enabled ? "Webhook ativado" : "Webhook desativado");
       loadWebhooks();
     } catch (error) {
       const { title, description } = getErrorMessage(error);
@@ -117,7 +117,7 @@ export function WebhookList() {
     try {
       const api = new WhatsAppAPI();
       await api.testWebhook(id);
-      toast.success("Test sent successfully");
+      toast.success("Teste enviado com sucesso");
     } catch (error) {
       const { title, description } = getErrorMessage(error);
       toast.error(title, { description });
@@ -136,7 +136,7 @@ export function WebhookList() {
     try {
       const api = new WhatsAppAPI();
       await api.deleteWebhook(deleteDialog.id);
-      toast.success("Webhook deleted");
+      toast.success("Webhook excluído");
       setDeleteDialog(null);
       loadWebhooks();
     } catch (error) {
@@ -149,16 +149,16 @@ export function WebhookList() {
     <>
       <PageHeader
         title="Webhooks"
-        description="Manage webhook endpoints for receiving WhatsApp messages"
+        description="Envie novas mensagens para outros sistemas automaticamente"
         actions={
           <>
             <Button variant="outline" onClick={loadWebhooks} disabled={loading}>
               <RefreshCw className={"h-4 w-4 mr-2" + (loading ? " animate-spin" : "")} />
-              Refresh
+              Atualizar
             </Button>
             <Button onClick={handleCreate}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Webhook
+              Novo webhook
             </Button>
           </>
         }
@@ -171,11 +171,11 @@ export function WebhookList() {
       ) : webhooks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border rounded-lg bg-muted/30">
           <WebhookIcon className="h-10 w-10 mb-4" />
-          <h3 className="text-base font-medium mb-2">No webhooks configured</h3>
-          <p className="text-sm mb-4">Create your first webhook to start receiving messages</p>
+          <h3 className="text-base font-medium mb-2">Nenhum webhook cadastrado</h3>
+          <p className="text-sm mb-4">Crie um webhook para começar a receber mensagens em outro sistema.</p>
           <Button onClick={handleCreate}>
             <Plus className="h-4 w-4 mr-2" />
-            Create Webhook
+            Criar webhook
           </Button>
         </div>
       ) : (
@@ -214,15 +214,15 @@ export function WebhookList() {
       <AlertDialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Webhook</AlertDialogTitle>
+          <AlertDialogTitle>Excluir webhook</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{deleteDialog?.name}&quot;? This will also delete all webhook logs and cannot be undone.
+              Deseja excluir &quot;{deleteDialog?.name}&quot;? O histórico de entregas também será excluído e essa ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
+              Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

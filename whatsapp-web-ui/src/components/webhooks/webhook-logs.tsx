@@ -66,14 +66,14 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
   const getStatusInfo = (log: WebhookLog) => {
     if (log.response_status) {
       if (log.response_status >= 200 && log.response_status < 300) {
-        return { status: "success", icon: CheckCircle, label: "SUCCESS" };
+        return { status: "success", icon: CheckCircle, label: "Entregue" };
       }
-      return { status: "error", icon: XCircle, label: "ERROR" };
+      return { status: "error", icon: XCircle, label: "Com erro" };
     }
     if (log.delivered_at) {
-      return { status: "success", icon: CheckCircle, label: "DELIVERED" };
+      return { status: "success", icon: CheckCircle, label: "Entregue" };
     }
-    return { status: "pending", icon: Clock, label: "PENDING" };
+    return { status: "pending", icon: Clock, label: "Aguardando" };
   };
 
   const formatDate = (dateString: string) => {
@@ -81,7 +81,7 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
       const date = new Date(dateString);
       return date.toLocaleDateString() + " " + date.toLocaleTimeString();
     } catch {
-      return "Invalid date";
+      return "Data inválida";
     }
   };
 
@@ -99,18 +99,18 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>
-              <DialogTitle>Webhook Logs</DialogTitle>
+              <DialogTitle>Histórico de entregas</DialogTitle>
               <DialogDescription>{webhookName}</DialogDescription>
             </div>
             <Button variant="outline" size="sm" onClick={loadLogs} disabled={loading || refreshing}>
               <RefreshCw className={"h-4 w-4 mr-1" + (loading || refreshing ? " animate-spin" : "")} />
-              Refresh
+              Atualizar
             </Button>
           </div>
         </DialogHeader>
 
         <div className="flex items-center justify-between text-sm text-muted-foreground border-b pb-2">
-          <span>{shown.length} log {shown.length === 1 ? "entry" : "entries"}</span>
+          <span>{shown.length} {shown.length === 1 ? "registro" : "registros"}</span>
         </div>
 
         {loading ? (
@@ -120,8 +120,8 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
         ) : shown.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <Clock className="h-12 w-12 mb-4" />
-            <p>No logs yet</p>
-            <p className="text-sm">Logs will appear here when messages trigger this webhook</p>
+            <p>Nenhuma entrega registrada</p>
+            <p className="text-sm">As entregas aparecerão aqui quando uma mensagem ativar este webhook.</p>
           </div>
         ) : (
           <ScrollArea className="h-[500px] pr-4">
@@ -131,8 +131,6 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
                 const StatusIcon = statusInfo.icon;
                 const payload = parsePayload(log.payload);
                 const chatName = payload?.message?.chat_name;
-                const processingTime = payload?.metadata?.processing_time_ms || 0;
-
                 const noticeVariant =
                   statusInfo.status === "error" ? "destructive" : statusInfo.status === "success" ? "success" : "warning";
 
@@ -145,7 +143,7 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
                           {statusInfo.label}
                         </Badge>
                         <span className="text-sm text-muted-foreground">
-                          Attempt #{log.attempt_count || 1}
+                          Tentativa {log.attempt_count || 1}
                         </span>
                       </div>
                       <span className="text-sm text-muted-foreground">{formatDate(log.created_at)}</span>
@@ -153,27 +151,19 @@ export function WebhookLogs({ open, onOpenChange, webhookId, webhookName }: Webh
 
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
-                        <span className="text-muted-foreground">Trigger: </span>
-                        <span>{log.trigger_type}: {log.trigger_value || "all"}</span>
+                        <span className="text-muted-foreground">Condição: </span>
+                        <span>{log.trigger_value || "Todas as mensagens"}</span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Message ID: </span>
-                        <span className="font-mono text-xs">{log.message_id || "N/A"}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Chat: </span>
-                        <span>{chatName ? chatName + " (" + log.chat_jid + ")" : log.chat_jid || "N/A"}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Processing: </span>
-                        <span>{processingTime}ms</span>
+                        <span className="text-muted-foreground">Conversa: </span>
+                        <span>{chatName || "Não identificada"}</span>
                       </div>
                     </div>
 
                     {log.response_status && (
                       <div className="text-sm">
-                        <span className="text-muted-foreground">Response: </span>
-                        <span>HTTP {log.response_status}</span>
+                        <span className="text-muted-foreground">Resposta: </span>
+                        <span>{log.response_status}</span>
                         {log.response_body && (
                           <span className="text-muted-foreground ml-2">
                             - {log.response_body.substring(0, 100)}{log.response_body.length > 100 ? "..." : ""}

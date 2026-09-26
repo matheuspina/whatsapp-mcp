@@ -10,7 +10,7 @@ import { ActiveSession, WhatsAppAPI, getErrorMessage } from "@/lib/api";
 
 /** Turns a raw User-Agent into something a person can recognise ("Chrome on macOS"). */
 export function describeUserAgent(ua: string): string {
-  if (!ua) return "Unknown device";
+  if (!ua) return "Dispositivo desconhecido";
   const browser = /Edg\//.test(ua)
     ? "Edge"
     : /OPR\//.test(ua)
@@ -80,7 +80,7 @@ export function ActiveSessions() {
     setRevoking(session.id);
     try {
       await new WhatsAppAPI().revokeSession(session.id);
-      toast.success("Session ended");
+      toast.success("Acesso encerrado");
       load();
     } catch (error) {
       toast.error(getErrorMessage(error).title, { description: getErrorMessage(error).description });
@@ -94,21 +94,20 @@ export function ActiveSessions() {
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-1.5">
-            <CardTitle>Active sessions</CardTitle>
+            <CardTitle>Acessos ativos</CardTitle>
             <CardDescription>
-              Everyone currently signed in to this panel. Sessions are kept on the server, so this list is the
-              same from any browser.
+              Dispositivos que estão conectados ao painel.
             </CardDescription>
           </div>
           <Button variant="outline" size="sm" className="shrink-0" onClick={load} disabled={loading}>
             <RefreshCw className={"mr-2 h-4 w-4 " + (loading ? "animate-spin" : "")} />
-            Refresh
+            Atualizar
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {sessions === null && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
-        {sessions?.length === 0 && <p className="text-sm text-muted-foreground">No active sessions.</p>}
+        {sessions?.length === 0 && <p className="text-sm text-muted-foreground">Nenhum acesso ativo.</p>}
         {sessions?.map((s) => (
           <div key={s.id} className="flex items-center justify-between gap-4 rounded-lg border p-3">
             <div className="flex min-w-0 items-start gap-3">
@@ -116,13 +115,13 @@ export function ActiveSessions() {
               <div className="min-w-0 text-sm">
                 <div className="flex flex-wrap items-center gap-2 font-medium">
                   {describeUserAgent(s.user_agent)}
-                  {s.current && <Badge>This session</Badge>}
+                  {s.current && <Badge>Este dispositivo</Badge>}
                 </div>
                 <div className="text-muted-foreground">
                   {s.username} · {s.ip}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Signed in {formatDate(s.created_at)} · Last active {formatDate(s.last_seen_at)}
+                  Entrou em {formatDate(s.created_at)} · Última atividade {formatDate(s.last_seen_at)}
                 </div>
               </div>
             </div>
@@ -133,7 +132,7 @@ export function ActiveSessions() {
                 ) : (
                   <LogOut className="mr-2 h-4 w-4" />
                 )}
-                End
+                Encerrar
               </Button>
             )}
           </div>

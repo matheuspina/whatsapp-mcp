@@ -25,20 +25,20 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>Quick settings for this panel</DialogDescription>
+          <DialogTitle>Configurações</DialogTitle>
+          <DialogDescription>Ajustes rápidos do painel</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
           <div className="space-y-4">
-            <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Appearance</h4>
+            <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Aparência</h4>
             <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="dark-mode">Dark Mode</Label>
-                <p className="text-xs text-muted-foreground">Toggle dark theme</p>
+                <Label htmlFor="dark-mode">Modo escuro</Label>
+                <p className="text-xs text-muted-foreground">Usar o tema escuro</p>
               </div>
               <Button id="dark-mode" variant={darkMode ? "default" : "outline"} size="sm" onClick={() => setDarkMode(!darkMode)}>
-                {darkMode ? "On" : "Off"}
+                {darkMode ? "Ativado" : "Desativado"}
               </Button>
             </div>
           </div>
@@ -46,12 +46,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <Separator />
 
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Account</h4>
+            <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Conta</h4>
             <p className="text-sm text-muted-foreground">
-              Signed-in sessions and sign out are managed on the Settings page.
+              Gerencie os acessos e saia da conta pela página de configurações.
             </p>
             <Button variant="outline" asChild onClick={() => onOpenChange(false)}>
-              <Link href="/settings">Open Settings</Link>
+              <Link href="/settings">Abrir configurações</Link>
             </Button>
           </div>
         </div>
