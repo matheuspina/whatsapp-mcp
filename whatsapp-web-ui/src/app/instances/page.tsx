@@ -20,18 +20,16 @@ import {
   X,
   LayoutGrid,
   Table as TableIcon,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/layout/page";
+import { StatCard, StatGrid } from "@/components/common/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -67,6 +65,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { WhatsAppAPI, Instance, Employee, PairingState } from "@/lib/api";
 
 const CORPORATE_TERMS =
@@ -113,7 +112,6 @@ export default function InstancesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "online" | "offline" | "unconfirmed">("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   // Pairing dialog
   const [pairingOpen, setPairingOpen] = useState(false);
@@ -344,75 +342,73 @@ export default function InstancesPage() {
         title="Números WhatsApp"
         description="Aparelhos conectados para monitoramento e auditoria em conformidade com as diretrizes corporativas."
         actions={
-          <Button onClick={openNewPairing} className="gap-2 shadow-sm">
-            <Plus className="size-4" />
-            Conectar Novo Aparelho
-          </Button>
+          <>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 text-muted-foreground hover:text-foreground"
+                  aria-label="Como funciona o monitoramento de aparelhos WhatsApp"
+                  title="Como funciona o monitoramento"
+                >
+                  <Info className="size-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-3">
+                <p className="mb-2 text-xs font-semibold text-foreground">Monitoramento de aparelhos</p>
+                <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
+                  <p><strong className="text-foreground">Aparelho conectado:</strong> o número é emparelhado como sessão web e os eventos são registrados para auditoria.</p>
+                  <p><strong className="text-foreground">Somente leitura:</strong> o envio por automação fica desativado por padrão e pode ser liberado por aparelho.</p>
+                  <p><strong className="text-foreground">Validade:</strong> o WhatsApp pode desvincular sessões sem conexão por mais de 14 dias.</p>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button onClick={openNewPairing} className="gap-2 shadow-sm">
+              <Plus className="size-4" />
+              Conectar Novo Aparelho
+            </Button>
+          </>
         }
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Total</span>
-            <Smartphone className="size-4 text-primary" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading ? "..." : visible.length}
-          </p>
-          <span className="text-[11px] text-muted-foreground">aparelhos cadastrados</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Online</span>
-            <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-            {loading ? "..." : onlineCount}
-          </p>
-          <span className="text-[11px] text-muted-foreground">com conexão ativa</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Envio Liberado</span>
-            <Send className="size-4 text-sky-600 dark:text-sky-400" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading ? "..." : sendAllowedCount}
-          </p>
-          <span className="text-[11px] text-muted-foreground">com permissão de disparo</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">LGPD & Compliance</span>
-            <ShieldCheck className="size-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading ? "..." : `${visible.length - unconfirmed.length}/${visible.length}`}
-          </p>
-          <span className="text-[11px] text-muted-foreground">termos confirmados</span>
-        </Card>
-      </div>
+      <StatGrid columns={4}>
+        <StatCard
+          icon={<Smartphone />}
+          label="Aparelhos"
+          value={loading ? "..." : visible.length}
+        />
+        <StatCard
+          icon={<span className="size-2 rounded-full bg-emerald-500" />}
+          label="Online"
+          value={loading ? "..." : onlineCount}
+          valueClassName="text-emerald-600 dark:text-emerald-400"
+        />
+        <StatCard
+          icon={<Send />}
+          label="Envio liberado"
+          value={loading ? "..." : sendAllowedCount}
+        />
+        <StatCard
+          icon={<ShieldCheck />}
+          label="LGPD confirmado"
+          value={loading ? "..." : `${visible.length - unconfirmed.length}/${visible.length}`}
+        />
+      </StatGrid>
 
       {/* Pending attestation alert */}
       {unconfirmed.length > 0 && (
-        <Card className="border-warning/50 bg-warning/5 p-4 shadow-sm">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2.5">
+          <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-warning/15 text-warning shrink-0">
-                <ShieldAlert className="size-5" />
-              </div>
+              <ShieldAlert className="size-4 shrink-0 text-warning" />
               <div>
-                <p className="text-sm font-semibold text-foreground">
+                <p className="text-xs font-medium text-foreground">
                   {unconfirmed.length === 1
                     ? "1 número com termo corporativo pendente"
                     : `${unconfirmed.length} números com termo corporativo pendente`}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   Números sem termo confirmado podem não registrar mensagens conforme políticas de compliance e LGPD.
                 </p>
               </div>
@@ -426,37 +422,8 @@ export default function InstancesPage() {
               Ver pendentes ({unconfirmed.length})
             </Button>
           </div>
-        </Card>
+        </div>
       )}
-
-      {/* How it works expandable card */}
-      <Card className="border-border/70 shadow-sm overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowHowItWorks(!showHowItWorks)}
-          className="flex w-full items-center justify-between p-3.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <span className="flex items-center gap-2">
-            <Info className="size-4 text-primary" />
-            Como funciona o monitoramento de aparelhos WhatsApp
-          </span>
-          {showHowItWorks ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-        </button>
-
-        {showHowItWorks && (
-          <CardContent className="border-t bg-muted/20 p-4 text-xs leading-relaxed text-muted-foreground space-y-2">
-            <p>
-              • <strong>Aparelho Conectado:</strong> O número é emparelhado como sessão web vinculada. O colaborador continua usando o WhatsApp normalmente no celular e o bridge registra eventos para auditoria.
-            </p>
-            <p>
-              • <strong>Somente Leitura por Padrão:</strong> Para segurança da conta, o envio por IA ou automação é desativado por padrão e deve ser ativado individualmente por aparelho.
-            </p>
-            <p>
-              • <strong>Validade da Sessão:</strong> O WhatsApp desvincula automaticamente aparelhos cujo celular fique mais de 14 dias sem conexão com a internet.
-            </p>
-          </CardContent>
-        )}
-      </Card>
 
       {/* Filter and View Controls */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -568,50 +535,47 @@ export default function InstancesPage() {
         </Card>
       ) : viewMode === "grid" ? (
         /* Grid Cards View */
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filteredInstances.map((inst) => {
             const isOnline = inst.live;
             const isActionLoading = actionLoading?.includes(`-${inst.id}`);
+            const statusLabel = inst.status === "pairing" ? "Pareando" : isOnline ? "Online" : "Offline";
 
             return (
               <Card
                 key={inst.id}
-                className="group relative flex flex-col justify-between overflow-hidden transition-all duration-200 hover:border-primary/50 hover:shadow-md"
+                className="group border-border/80 py-0 shadow-none transition-colors hover:border-primary/40"
               >
-                {/* Header */}
-                <CardHeader className="pb-3">
+                <CardContent className="p-3.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className={`flex size-10 items-center justify-center rounded-lg shrink-0 ${
+                        className={`relative flex size-9 shrink-0 items-center justify-center rounded-md ${
                           isOnline
                             ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                             : "bg-muted text-muted-foreground"
                         }`}
+                        title={statusLabel}
                       >
-                        <Smartphone className="size-5" />
+                        <Smartphone className="size-4" />
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-card ${
+                            inst.status === "pairing"
+                              ? "bg-amber-500"
+                              : isOnline
+                                ? "bg-emerald-500"
+                                : "bg-muted-foreground/50"
+                          }`}
+                          aria-label={statusLabel}
+                        />
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <CardTitle className="text-base font-semibold truncate" title={inst.alias}>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <CardTitle className="truncate text-sm font-semibold" title={inst.alias}>
                             {inst.alias || "Número WhatsApp"}
                           </CardTitle>
-                          {isOnline ? (
-                            <Badge variant="success" className="gap-1 text-[11px] py-0">
-                              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              Online
-                            </Badge>
-                          ) : inst.status === "pairing" ? (
-                            <Badge variant="warning" className="gap-1 text-[11px] py-0">
-                              Pareando
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[11px] text-muted-foreground py-0">
-                              Offline
-                            </Badge>
-                          )}
                         </div>
-                        <p className="font-mono text-xs text-muted-foreground mt-0.5">
+                        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
                           {formatPhone(inst)}
                         </p>
                       </div>
@@ -675,29 +639,17 @@ export default function InstancesPage() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                </CardHeader>
 
-                {/* Body */}
-                <CardContent className="space-y-3.5 pt-0 mt-auto">
-                  {/* Responsible employee select */}
-                  <div className="grid gap-1.5 rounded-lg border bg-muted/20 p-2.5">
-                    <Label className="text-[11px] font-medium text-muted-foreground flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <User className="size-3" />
-                        Colaborador Responsável
-                      </span>
-                      {inst.department_name && (
-                        <span className="text-[10px] text-muted-foreground">
-                          Setor: {inst.department_name}
-                        </span>
-                      )}
-                    </Label>
+                  {/* Assignment stays inline with the rest of the device metadata. */}
+                  <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3">
+                    <User className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="shrink-0 text-[11px] text-muted-foreground">Responsável</span>
                     <Select
                       value={inst.employee_id ? inst.employee_id.toString() : NO_EMPLOYEE}
                       onValueChange={(v) => handleEmployeeChange(inst, v)}
                       disabled={inst.status === "pairing" || actionLoading === `employee-${inst.id}`}
                     >
-                      <SelectTrigger className="h-8 text-xs bg-background">
+                      <SelectTrigger className="ml-auto h-7 w-full max-w-[12rem] border-0 bg-muted/40 px-2 text-xs shadow-none hover:bg-muted/70 focus-visible:ring-1">
                         <SelectValue placeholder="Sem colaborador" />
                       </SelectTrigger>
                       <SelectContent>
@@ -712,97 +664,85 @@ export default function InstancesPage() {
                     </Select>
                   </div>
 
-                  {/* Send permission toggle */}
-                  <div className="flex items-center justify-between gap-3 rounded-lg border p-2.5 bg-background">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-1 rounded ${inst.allow_send ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-muted text-muted-foreground"}`}>
-                        {inst.allow_send ? <Send className="size-3.5" /> : <Eye className="size-3.5" />}
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold leading-tight">
-                          {inst.allow_send ? "Disparo Habilitado" : "Somente Leitura"}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {inst.allow_send ? "IA e API podem enviar mensagens" : "Apenas captura de mensagens"}
-                        </p>
-                      </div>
-                    </div>
+                  <div className="mt-2 flex min-h-7 items-center justify-between gap-3 text-[11px]">
+                    <label className="flex items-center gap-1.5 text-muted-foreground">
+                      {inst.allow_send ? <Send className="size-3.5 text-amber-500" /> : <Eye className="size-3.5" />}
+                      <span>{inst.allow_send ? "Envio permitido" : "Somente leitura"}</span>
+                    </label>
                     <Switch
                       checked={inst.allow_send}
+                      className="scale-90"
                       disabled={inst.status === "pairing" || actionLoading === `send-${inst.id}`}
                       onCheckedChange={(v) => handleAllowSend(inst, v)}
                       aria-label="Permitir envio"
                     />
                   </div>
 
-                  {/* Compliance & LGPD badge/action */}
-                  <div>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
                     {inst.corporate_asset_confirmed ? (
-                      <Badge variant="success" className="gap-1 text-[11px] font-normal py-0.5">
-                        <CheckCircle2 className="size-3" />
-                        Termo LGPD Confirmado
-                      </Badge>
+                      <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3.5" />
+                        LGPD confirmado
+                      </span>
                     ) : (
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        className="w-full h-8 gap-1.5 text-xs border-warning/50 text-warning hover:bg-warning/10"
+                        className="h-6 px-1.5 text-[11px] text-warning hover:bg-warning/10 hover:text-warning"
                         onClick={() => {
                           setConfirmChecked(false);
                           setConfirmTarget(inst);
                         }}
                       >
                         <ShieldAlert className="size-3.5" />
-                        Confirmar Termo de Ativo
+                        Confirmar LGPD
                       </Button>
                     )}
-                  </div>
-
-                  {/* Footer metadata */}
-                  <div className="flex items-center justify-between border-t border-border/50 pt-2.5 text-[11px] text-muted-foreground">
-                    <span>
-                      {inst.last_seen_at
-                        ? `Visto: ${new Date(inst.last_seen_at).toLocaleDateString("pt-BR")} às ${new Date(
-                            inst.last_seen_at
-                          ).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
-                        : "Nunca conectado"}
-                    </span>
-
-                    {isOnline ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-[11px] text-muted-foreground hover:text-destructive"
-                        disabled={actionLoading === `disconnect-${inst.id}`}
-                        onClick={() =>
-                          runAction(
-                            `disconnect-${inst.id}`,
-                            () => api.disconnectInstance(inst.id),
-                            "Número desconectado.",
-                            "Erro ao desconectar"
-                          )
-                        }
-                      >
-                        Desconectar
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-[11px] text-primary hover:text-primary"
-                        disabled={actionLoading === `reconnect-${inst.id}`}
-                        onClick={() =>
-                          runAction(
-                            `reconnect-${inst.id}`,
-                            () => api.reconnectInstance(inst.id),
-                            "Comando de reconexão enviado.",
-                            "Erro ao reconectar"
-                          )
-                        }
-                      >
-                        Reconectar
-                      </Button>
-                    )}
+                    <div className="ml-auto flex min-w-0 items-center gap-2">
+                      <span className="hidden truncate text-[10px] text-muted-foreground sm:inline">
+                        {inst.last_seen_at
+                          ? `Visto ${new Date(inst.last_seen_at).toLocaleTimeString("pt-BR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
+                          : "Nunca conectado"}
+                      </span>
+                      {isOnline ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                          disabled={actionLoading === `disconnect-${inst.id}`}
+                          onClick={() =>
+                            runAction(
+                              `disconnect-${inst.id}`,
+                              () => api.disconnectInstance(inst.id),
+                              "Número desconectado.",
+                              "Erro ao desconectar"
+                            )
+                          }
+                        >
+                          Desconectar
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-1.5 text-[11px] text-primary hover:text-primary"
+                          disabled={actionLoading === `reconnect-${inst.id}`}
+                          onClick={() =>
+                            runAction(
+                              `reconnect-${inst.id}`,
+                              () => api.reconnectInstance(inst.id),
+                              "Comando de reconexão enviado.",
+                              "Erro ao reconectar"
+                            )
+                          }
+                        >
+                          Reconectar
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -826,6 +766,7 @@ export default function InstancesPage() {
             <TableBody>
               {filteredInstances.map((inst) => {
                 const isOnline = inst.live;
+                const statusLabel = inst.status === "pairing" ? "Pareando" : isOnline ? "Online" : "Offline";
                 return (
                   <TableRow key={inst.id} className="group">
                     <TableCell>
@@ -847,16 +788,17 @@ export default function InstancesPage() {
                     </TableCell>
 
                     <TableCell>
-                      {isOnline ? (
-                        <Badge variant="success" className="gap-1 text-[11px]">
-                          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Online
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[11px] text-muted-foreground">
-                          Offline
-                        </Badge>
-                      )}
+                      <span
+                        className={`inline-block size-2 rounded-full ${
+                          inst.status === "pairing"
+                            ? "bg-amber-500"
+                            : isOnline
+                              ? "bg-emerald-500"
+                              : "bg-muted-foreground/50"
+                        }`}
+                        title={statusLabel}
+                        aria-label={statusLabel}
+                      />
                     </TableCell>
 
                     <TableCell>
@@ -880,25 +822,22 @@ export default function InstancesPage() {
                     </TableCell>
 
                     <TableCell>
-                      {inst.allow_send ? (
-                        <Badge variant="warning" className="gap-1 text-[11px]">
-                          <Send className="size-3" />
-                          Envio Ativo
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="gap-1 text-[11px] text-muted-foreground">
-                          <Eye className="size-3" />
-                          Leitura
-                        </Badge>
-                      )}
+                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {inst.allow_send ? (
+                          <Send className="size-3.5 text-amber-500" />
+                        ) : (
+                          <Eye className="size-3.5" />
+                        )}
+                        {inst.allow_send ? "Envio ativo" : "Leitura"}
+                      </span>
                     </TableCell>
 
                     <TableCell>
                       {inst.corporate_asset_confirmed ? (
-                        <Badge variant="success" className="gap-1 text-[11px] font-normal">
-                          <CheckCircle2 className="size-3" />
+                        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="size-3.5" />
                           Confirmado
-                        </Badge>
+                        </span>
                       ) : (
                         <Button
                           variant="outline"

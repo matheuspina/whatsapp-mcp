@@ -17,9 +17,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/layout/page";
+import { StatCard, StatGrid } from "@/components/common/stat-card";
 import { ClientCard } from "@/components/mcp/client-card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,56 +94,35 @@ export default function McpPage() {
         description="Conecte assistentes, agentes e IDEs inteligentes para ler e interagir com conversas do WhatsApp de forma segura."
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Protocolo</span>
-            <Server className="size-4 text-primary" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">MCP SSE / HTTP</p>
-          <span className="text-[11px] text-muted-foreground">FastMCP Python 3.12</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Status da URL</span>
-            {localUrl ? (
-              <Badge variant="outline" className="text-[10px] py-0">
-                Localhost
-              </Badge>
-            ) : (
-              <Badge variant="success" className="text-[10px] py-0">
-                Pública
-              </Badge>
-            )}
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {localUrl ? "Ambiente Local" : "Acesso Externo"}
-          </p>
-          <span className="text-[11px] text-muted-foreground">
-            {localUrl ? "Apenas conexões desta máquina" : "Compatível com conectores em nuvem"}
-          </span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Clientes Suportados</span>
-            <Layers className="size-4 text-sky-600 dark:text-sky-400" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{clients.length}</p>
-          <span className="text-[11px] text-muted-foreground">editores, CLIs e plataformas</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Ferramentas</span>
-            <Cpu className="size-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">27 MCP Tools</p>
-          <span className="text-[11px] text-muted-foreground">mensagens, contatos, chats, envio</span>
-        </Card>
-      </div>
+      <StatGrid columns={4}>
+        <StatCard
+          icon={<Server />}
+          label="Protocolo"
+          value="MCP SSE / HTTP"
+          description="FastMCP Python 3.12"
+          large={false}
+        />
+        <StatCard
+          icon={localUrl ? <Globe className="text-muted-foreground" /> : <Cloud className="text-success" />}
+          label="Status da URL"
+          value={localUrl ? "Ambiente local" : "Acesso externo"}
+          description={localUrl ? "Apenas conexões desta máquina" : "Compatível com conectores em nuvem"}
+          large={false}
+        />
+        <StatCard
+          icon={<Layers className="text-sky-600 dark:text-sky-400" />}
+          label="Clientes suportados"
+          value={clients.length}
+          description="editores, CLIs e plataformas"
+        />
+        <StatCard
+          icon={<Cpu className="text-emerald-600 dark:text-emerald-400" />}
+          label="Ferramentas"
+          value="27 MCP Tools"
+          description="mensagens, contatos, chats, envio"
+          large={false}
+        />
+      </StatGrid>
 
       {/* Server URL Configuration Card */}
       <Card className="border-border/80 shadow-sm">

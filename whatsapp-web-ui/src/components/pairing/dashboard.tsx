@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Notice, noticeToneVariants } from "@/components/common/notice";
-import { StatCard } from "@/components/common/stat-card";
+import { StatCard, StatGrid } from "@/components/common/stat-card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
@@ -139,7 +139,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <StatGrid columns={2}>
           <StatCard
             icon={syncStatus?.syncing ? <Loader2 className="animate-spin text-warning" /> : <CheckCircle className="text-success" />}
             label="Sync Status"
@@ -166,7 +166,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
             label="Chats"
             value={syncStatus?.conversation_count?.toLocaleString() || "0"}
           />
-        </div>
+        </StatGrid>
 
         {syncStatus?.recommendations && syncStatus.recommendations.length > 0 && (
           <Notice variant="warning" icon={AlertTriangle} title="Recommendations">

@@ -21,6 +21,7 @@ import { ptBR } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/layout/page";
+import { StatCard, StatGrid } from "@/components/common/stat-card";
 import { FeedMessageCard } from "@/components/audit/feed-message";
 import { VersionsDialog } from "@/components/audit/versions-dialog";
 import { Button } from "@/components/ui/button";
@@ -238,52 +239,33 @@ export default function MessagesPage() {
         description="Histórico unificado de conversas capturadas pelos números monitorados com rastreabilidade de operadores."
       />
 
-      {/* KPI Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Carregadas</span>
-            <MessageSquare className="size-4" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading ? "..." : messages.length}
-          </p>
-          <span className="text-[11px] text-muted-foreground">no intervalo selecionado</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Apagadas</span>
-            <Trash2 className="size-4 text-destructive" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-destructive">
-            {loading ? "..." : deletedCount}
-          </p>
-          <span className="text-[11px] text-muted-foreground">removidas pelo remetente</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Editadas</span>
-            <History className="size-4 text-warning" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading ? "..." : editedCount}
-          </p>
-          <span className="text-[11px] text-muted-foreground">com versões no histórico</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Aparelhos</span>
-            <Smartphone className="size-4 text-primary" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {instances.filter((i) => i.live).length}/{instances.length}
-          </p>
-          <span className="text-[11px] text-muted-foreground">instâncias ativas</span>
-        </Card>
-      </div>
+      <StatGrid columns={4}>
+        <StatCard
+          icon={<MessageSquare />}
+          label="Carregadas"
+          value={loading ? "..." : messages.length}
+          description="no intervalo selecionado"
+        />
+        <StatCard
+          icon={<Trash2 className="text-destructive" />}
+          label="Apagadas"
+          value={loading ? "..." : deletedCount}
+          description="removidas pelo remetente"
+          valueClassName="text-destructive"
+        />
+        <StatCard
+          icon={<History className="text-warning" />}
+          label="Editadas"
+          value={loading ? "..." : editedCount}
+          description="com versões no histórico"
+        />
+        <StatCard
+          icon={<Smartphone />}
+          label="Aparelhos"
+          value={`${instances.filter((i) => i.live).length}/${instances.length}`}
+          description="instâncias ativas"
+        />
+      </StatGrid>
 
       {/* Filter Card: Basic Filters directly visible + Calendar Popover + More Filters Popover */}
       <Card className="border-border/80 shadow-sm p-4">

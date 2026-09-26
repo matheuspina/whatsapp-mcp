@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/layout/page";
+import { StatCard, StatGrid } from "@/components/common/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -306,52 +307,34 @@ export default function EmployeesPage() {
         }
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Total</span>
-            <Users className="size-4 text-primary" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading ? "..." : employees.length}
-          </p>
-          <span className="text-[11px] text-muted-foreground">colaboradores cadastrados</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Ativos</span>
-            <UserCheck className="size-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-            {loading ? "..." : activeCount}
-          </p>
-          <span className="text-[11px] text-muted-foreground">com acesso e atribuição</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Inativos</span>
-            <UserX className="size-4 text-muted-foreground" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-muted-foreground">
-            {loading ? "..." : inactiveCount}
-          </p>
-          <span className="text-[11px] text-muted-foreground">afastados ou desligados</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Com Setor</span>
-            <Building2 className="size-4 text-sky-600 dark:text-sky-400" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading ? "..." : withDeptCount}
-          </p>
-          <span className="text-[11px] text-muted-foreground">vinculados a departamento</span>
-        </Card>
-      </div>
+      <StatGrid columns={4}>
+        <StatCard
+          icon={<Users />}
+          label="Total"
+          value={loading ? "..." : employees.length}
+          description="colaboradores cadastrados"
+        />
+        <StatCard
+          icon={<UserCheck className="text-emerald-600 dark:text-emerald-400" />}
+          label="Ativos"
+          value={loading ? "..." : activeCount}
+          description="com acesso e atribuição"
+          valueClassName="text-emerald-600 dark:text-emerald-400"
+        />
+        <StatCard
+          icon={<UserX />}
+          label="Inativos"
+          value={loading ? "..." : inactiveCount}
+          description="afastados ou desligados"
+          valueClassName="text-muted-foreground"
+        />
+        <StatCard
+          icon={<Building2 />}
+          label="Com setor"
+          value={loading ? "..." : withDeptCount}
+          description="vinculados a departamento"
+        />
+      </StatGrid>
 
       {/* Filter and Control Bar */}
       <Card className="border-border/80 shadow-sm p-4">

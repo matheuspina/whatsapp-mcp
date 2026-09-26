@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/layout/page";
+import { StatCard, StatGrid } from "@/components/common/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -217,43 +218,26 @@ export default function DepartmentsPage() {
         }
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Total de Setores</span>
-            <Building2 className="size-4 text-primary" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading ? "..." : departments.length}
-          </p>
-          <span className="text-[11px] text-muted-foreground">cadastrados no sistema</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Colaboradores Alocados</span>
-            <Users className="size-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading ? "..." : totalEmployeesWithDept}
-          </p>
-          <span className="text-[11px] text-muted-foreground">vinculados a algum setor</span>
-        </Card>
-
-        <Card className="p-4 shadow-sm border-border/70">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">Média por Setor</span>
-            <Briefcase className="size-4 text-sky-600 dark:text-sky-400" />
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {loading || departments.length === 0
-              ? "0"
-              : (totalEmployeesWithDept / departments.length).toFixed(1)}
-          </p>
-          <span className="text-[11px] text-muted-foreground">membros por departamento</span>
-        </Card>
-      </div>
+      <StatGrid columns={3}>
+        <StatCard
+          icon={<Building2 />}
+          label="Total de setores"
+          value={loading ? "..." : departments.length}
+          description="cadastrados no sistema"
+        />
+        <StatCard
+          icon={<Users className="text-emerald-600 dark:text-emerald-400" />}
+          label="Colaboradores alocados"
+          value={loading ? "..." : totalEmployeesWithDept}
+          description="vinculados a algum setor"
+        />
+        <StatCard
+          icon={<Briefcase className="text-sky-600 dark:text-sky-400" />}
+          label="Média por setor"
+          value={loading || departments.length === 0 ? "0" : (totalEmployeesWithDept / departments.length).toFixed(1)}
+          description="membros por departamento"
+        />
+      </StatGrid>
 
       {/* Search and View Controls */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
