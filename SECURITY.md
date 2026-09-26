@@ -33,7 +33,7 @@ These are real. Read them before you connect an AI agent to your account.
 
 - **The MCP endpoint has no authentication unless you turn on OAuth.** Set `MCP_PUBLIC_URL` to require an OAuth 2.1 token, see [docs/mcp-oauth.md](docs/mcp-oauth.md); without it the MCP server (`http://127.0.0.1:8081/mcp`) accepts connections from any process on the same machine, and its tools include sending and deleting messages. The `127.0.0.1` binding keeps it off the network, but any local program can use it. Mitigate with a smaller toolset (for example `WHATSAPP_MCP_TOOLSETS=core`), the send allowlist, and by keeping human approval switched on for write tools in your AI client.
 - **Prompt injection.** Anyone who can message you can put text in front of your AI agent. Do not let an agent send messages, delete anything or call other connected tools without your approval. Avoid using this MCP in the same session as other connectors that can send email or messages unattended.
-- **Data at rest is not encrypted.** Messages, contacts and the WhatsApp session live in plain SQLite files under `store/`, and received media is downloaded to disk. Use full-disk encryption (FileVault, BitLocker, LUKS) and treat `store/` like a password vault: never commit it or share it. The same goes for `store-index/`: the search indexer keeps a plain-text copy of your message text there.
+- **Data at rest is not encrypted.** Messages, contacts and the WhatsApp session live in plain SQLite files under `store/`, and received media is downloaded to disk. Use full-disk encryption (FileVault, BitLocker, LUKS) and treat `store/` like a password vault: never commit it or share it. The same goes for the `index-data` Docker volume: the search indexer keeps a plain-text copy of your message text there.
 - **Secrets in `.env`.** `API_KEY` and `WEB_UI_PASSWORD` are stored in plain text in `.env`, which is git-ignored. Keep it readable only by you (`chmod 600 .env`), and use strong values.
 - **Sessions are in memory.** Restarting the bridge signs everyone out.
 - **No TLS out of the box.** Traffic stays on your machine. If you expose the panel beyond `127.0.0.1`, put a TLS-terminating reverse proxy in front (the bridge honours `X-Forwarded-Proto: https` for the cookie `Secure` flag) and restrict who can reach it.
@@ -47,7 +47,7 @@ This project uses the unofficial WhatsApp Web protocol. That is against WhatsApp
 ## Hardening checklist
 
 - [ ] Set a long random `API_KEY` and a strong `WEB_UI_PASSWORD` (`openssl rand -hex 32`, `openssl rand -base64 18`).
-- [ ] `chmod 600 .env`, and never commit `.env`, `store/` or `store-index/`.
+- [ ] `chmod 600 .env`, and never commit `.env`, `store/`.
 - [ ] Enable full-disk encryption.
 - [ ] Expose only the toolsets you need with `WHATSAPP_MCP_TOOLSETS`.
 - [ ] Set `WHATSAPP_ALLOWLIST_JIDS` if the agent should only message specific people or groups.

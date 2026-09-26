@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { APIError, UNAUTHORIZED_EVENT, WhatsAppAPI } from "@/lib/api";
 import { useAuth, useSettings } from "@/lib/store";
 
@@ -86,10 +88,27 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (onLogin) return status === "anon" ? <>{children}</> : null;
   if (status !== "authed") return null; // redirecting to /login
 
+  const getPageTitle = (path: string) => {
+    const p = path.replace(/\/+$/, "");
+    if (!p) return "Overview";
+    if (p.startsWith("/pairing")) return "Device Pairing";
+    if (p.startsWith("/webhooks")) return "Webhooks";
+    if (p.startsWith("/mcp-clients")) return "MCP Clients";
+    if (p.startsWith("/settings")) return "Settings";
+    return "Dashboard";
+  };
+
   return (
-    <div className="flex min-h-screen">
+    <SidebarProvider>
       <Sidebar />
-      <main className="flex-1 bg-muted/30">{children}</main>
-    </div>
+      <SidebarInset>
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <span className="text-sm font-medium text-foreground">{getPageTitle(pathname)}</span>
+        </header>
+        <div className="flex flex-1 flex-col overflow-auto bg-muted/30">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

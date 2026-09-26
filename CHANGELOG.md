@@ -3,11 +3,18 @@
 All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## \[Unreleased]
 
 Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 
+### Fixed
+
+- The `indexer` service crash-looped with `sqlite3.OperationalError: unable to open database file` when `./store-index`
+  did not exist: Docker created it as root and the non-root container user could not write to it. The index now lives
+  in the `index-data` named volume.
+
 ### Added
+
 - Local hybrid search (Phases 2 and 3): the indexer now embeds every chunk with a local model
   (`intfloat/multilingual-e5-small` through fastembed, stored with sqlite-vec) and the MCP server has a new
   `search` toolset with `search_messages` (keyword, semantic or hybrid, fused with reciprocal rank fusion, filtered by
@@ -32,6 +39,7 @@ Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 - OAuth 2.1 for the MCP endpoint, opt-in through `MCP_PUBLIC_URL`: discovery (RFC 9728, RFC 8414), dynamic client registration, authorization code with PKCE, rotating refresh tokens, revocation, and a sign-in page that reuses the panel credentials. `API_KEY` is also accepted as a bearer token. See [docs/mcp-oauth.md](docs/mcp-oauth.md).
 
 ### Changed
+
 - Project name and branding: **WhatsApp MCP** by Matheus Pina. The MCP server now reports itself as `whatsapp-mcp`.
 - License: modifications and additions are under the PolyForm Noncommercial License 1.0.0. Inherited MIT-licensed code keeps its notice (see [NOTICE.md](NOTICE.md)).
 - The web panel no longer asks for, stores or sends the API key. Any key saved by the earlier panel in the browser is discarded.
@@ -40,9 +48,7 @@ Based on `whatsapp-mcp-extended` 0.3.0 (see [NOTICE.md](NOTICE.md)).
 - Documentation reorganized under `docs/`.
 
 ### Security
+
 - The bridge no longer prints `API_KEY` in its startup banner.
 - The bridge refuses to start when `API_KEY` or `WEB_UI_PASSWORD` still have the `CHANGEME...` example value from `.env.example`.
 
-### Removed
-- The list of individual community contributors from the acknowledgements: their commits are no longer part of this repository's history. The project lineage and the upstream MIT notice remain.
-- Files specific to previous maintainers: a hard-coded launcher script, funding configuration, a fork-monitoring workflow, generated Windows scheduler scripts, development reports and an example screenshot.

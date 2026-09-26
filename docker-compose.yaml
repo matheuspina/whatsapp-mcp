@@ -64,7 +64,7 @@ services:
       - ./store:/app/store
       # The search index. Mounted writable only because SQLite needs to touch the WAL side files to read it;
       # the server opens index.db read-only.
-      - ./store-index:/app/index
+      - index-data:/app/index
       - model-cache:/app/models
     environment:
       - INDEX_DB_PATH=/app/index/index.db
@@ -144,7 +144,7 @@ services:
     entrypoint: ["python", "-m", "search.indexer"]
     volumes:
       - ./store:/app/store:ro          # messages.db / whatsapp.db, read-only: the indexer never writes to the bridge store
-      - ./store-index:/app/index       # index.db lives in its own writable location instead
+      - index-data:/app/index          # index.db lives in its own writable volume instead
       - model-cache:/app/models        # embedding model, downloaded once on first start
     environment:
       - TZ=UTC
@@ -171,4 +171,7 @@ networks:
     driver: bridge
 
 volumes:
+  # Named volume, not a bind mount: Docker would create a missing ./store-index as root and the non-root
+  # container user could not write index.db. A named volume inherits the ownership of /app/index in the image.
+  index-data:
   model-cache:  # local embedding model (~0.5 GB), shared by the indexer and the MCP server

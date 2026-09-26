@@ -121,7 +121,7 @@ flowchart LR
         Bridge["whatsapp-bridge<br/>Go, whatsmeow<br/>:8180"]
         Indexer["indexer<br/>Python, background<br/>no ports"]
         Store[("store/<br/>messages.db<br/>whatsapp.db")]
-        IndexDB[("store-index/<br/>index.db")]
+        IndexDB[("index-data volume<br/>index.db")]
     end
 
     WA(["WhatsApp<br/>servers"])
@@ -141,7 +141,7 @@ flowchart LR
 |-----------|-------|------|
 | [`whatsapp-bridge`](whatsapp-bridge) | Go, [whatsmeow](https://github.com/tulir/whatsmeow), SQLite | Talks to WhatsApp, stores messages, REST API, webhooks, panel sessions |
 | [`whatsapp-mcp-server`](whatsapp-mcp-server) | Python, FastMCP | MCP tools for your AI client |
-| [`whatsapp-mcp-server/search`](whatsapp-mcp-server/search) | Python, background service | Keyword and semantic search index (`store-index/index.db`); read-only against `store/`. Read by the MCP server's `search` toolset |
+| [`whatsapp-mcp-server/search`](whatsapp-mcp-server/search) | Python, background service | Keyword and semantic search index (`index.db` in the `index-data` volume); read-only against `store/`. Read by the MCP server's `search` toolset |
 | [`whatsapp-web-ui`](whatsapp-web-ui) | Next.js, Tailwind, shadcn/ui | Web panel |
 
 More in [docs/architecture.md](docs/architecture.md) and [docs/search.md](docs/search.md).

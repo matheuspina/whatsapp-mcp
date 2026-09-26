@@ -2,13 +2,50 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
+import {
+  ChevronsUpDown,
+  LayoutDashboard,
+  Link2,
+  LogOut,
+  MessageSquare,
+  Plug,
+  Settings,
+  User,
+  Webhook,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Link2, LogOut, MessageSquare, Plug, Settings, Webhook } from "lucide-react";
 import { WhatsAppAPI } from "@/lib/api";
 import { useAuth } from "@/lib/store";
+import {
+  Sidebar as SidebarPrimitive,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+} from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navItems = [
+  {
+    title: "Overview",
+    href: "/",
+    icon: LayoutDashboard,
+    description: "System overview",
+  },
   {
     title: "Pairing",
     href: "/pairing",
@@ -22,7 +59,7 @@ const navItems = [
     description: "Manage webhook endpoints",
   },
   {
-    title: "MCP",
+    title: "MCP Clients",
     href: "/mcp-clients",
     icon: Plug,
     description: "Connect AI clients",
@@ -31,32 +68,41 @@ const navItems = [
 
 type ConnectionDotStatus = "connected" | "disconnected" | "unknown";
 
-export function Sidebar() {
+export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimitive>) {
   const pathname = usePathname();
   const { username, setAnon } = useAuth();
   const [connStatus, setConnStatus] = useState<ConnectionDotStatus>("unknown");
 
-  const pollConnection = useCallback(async () => {
-    try {
-      const api = new WhatsAppAPI();
-      const status = await api.getConnectionStatus();
-      setConnStatus(status.connected ? "connected" : "disconnected");
-    } catch {
-      setConnStatus("unknown");
-    }
-  }, []);
-
   useEffect(() => {
-    pollConnection();
-    const interval = setInterval(pollConnection, 10000);
-    return () => clearInterval(interval);
-  }, [pollConnection]);
+    let cancelled = false;
+    const checkStatus = () => {
+      new WhatsAppAPI()
+        .getConnectionStatus()
+        .then((status) => {
+          if (!cancelled) {
+            setConnStatus(status.connected ? "connected" : "disconnected");
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setConnStatus("unknown");
+          }
+        });
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleLogout = async () => {
     try {
       await new WhatsAppAPI().logout();
     } finally {
-      setAnon(); // the gate redirects to /login
+      setAnon();
     }
   };
 
@@ -66,75 +112,142 @@ export function Sidebar() {
     unknown: "bg-yellow-500",
   }[connStatus];
 
+  const statusLabel = {
+    connected: "Connected",
+    disconnected: "Disconnected",
+    unknown: "Checking...",
+  }[connStatus];
+
   return (
-    <aside className="w-64 bg-card border-r min-h-screen p-4 flex flex-col">
-      <div className="flex items-center gap-2 px-2 mb-8">
-        <div className="relative">
-          <MessageSquare className="h-8 w-8 text-green-500" />
-          <span
-            className={cn("absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card", dotColor)}
-            title={connStatus === "connected" ? "Connected" : connStatus === "disconnected" ? "Disconnected" : "Checking..."}
-          />
-        </div>
-        <div>
-          <h1 className="font-bold text-lg">WhatsApp MCP</h1>
-          <p className="text-xs text-muted-foreground">by Matheus Pina</p>
-        </div>
-      </div>
-
-      <nav className="flex-1 space-y-2">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <item.icon className="h-5 w-5" />
-              <div>
-                <div className="font-medium text-sm">{item.title}</div>
-                <div className={cn("text-xs", isActive ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                  {item.description}
+    <SidebarPrimitive collapsible="icon" {...props}>
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild tooltip="WhatsApp MCP">
+              <Link href="/">
+                <div className="relative flex aspect-square size-8 items-center justify-center rounded-lg bg-green-500/10 text-green-600 dark:text-green-500">
+                  <MessageSquare className="size-5" />
+                  <span
+                    className={cn(
+                      "absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-sidebar",
+                      dotColor
+                    )}
+                    title={statusLabel}
+                  />
                 </div>
-              </div>
-            </Link>
-          );
-        })}
-      </nav>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">WhatsApp MCP</span>
+                  <span className="truncate text-xs text-muted-foreground">by Matheus Pina</span>
+                </div>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
 
-      <div className="border-t pt-4 mt-4">
-        <Link
-          href="/settings"
-          className={cn(
-            "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-            pathname === "/settings"
-              ? "bg-primary text-primary-foreground"
-              : "hover:bg-muted text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Settings className="h-5 w-5" />
-          <span className="font-medium text-sm">Settings</span>
-        </Link>
-        <div className="mt-2 flex items-center justify-between gap-2 px-3 py-2 text-sm">
-          <span className="truncate text-muted-foreground" title={username}>
-            {username}
-          </span>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex shrink-0 items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
-        </div>
-      </div>
-    </aside>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Menu</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.map((item) => {
+                const isActive =
+                  item.href === "/"
+                    ? pathname === "/"
+                    : pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                      <Link href={item.href}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname === "/settings" || pathname.startsWith("/settings/")}
+              tooltip="Settings"
+            >
+              <Link href="/settings">
+                <Settings />
+                <span>Settings</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <User className="size-4" />
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">{username || "User"}</span>
+                    <span className="truncate text-xs text-muted-foreground flex items-center gap-1.5">
+                      <span className={cn("inline-block size-1.5 rounded-full", dotColor)} />
+                      {statusLabel}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-auto size-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                side="top"
+                align="end"
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      <User className="size-4" />
+                    </div>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold">{username || "User"}</span>
+                      <span className="truncate text-xs text-muted-foreground flex items-center gap-1.5">
+                        <span className={cn("inline-block size-1.5 rounded-full", dotColor)} />
+                        {statusLabel}
+                      </span>
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="cursor-pointer">
+                    <Settings className="mr-2 size-4" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                >
+                  <LogOut className="mr-2 size-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+
+      <SidebarRail />
+    </SidebarPrimitive>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthGate } from "@/components/auth/auth-gate";
 import "./globals.css";
 
@@ -28,7 +29,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={geistSans.variable + " " + geistMono.variable + " antialiased"}>
-        <AuthGate>{children}</AuthGate>
+        <TooltipProvider>
+          <AuthGate>{children}</AuthGate>
+        </TooltipProvider>
         <Toaster richColors position="top-right" />
       </body>
     </html>

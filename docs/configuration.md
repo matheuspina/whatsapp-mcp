@@ -55,7 +55,7 @@ See [history-sync.md](history-sync.md).
 
 ## Local search indexer
 
-The background indexer that keeps the search index (`store-index/index.db`) up to date. See [search.md](search.md).
+The background indexer that keeps the search index (`index.db`, in the `index-data` volume) up to date. See [search.md](search.md).
 
 | Variable | Default | Description |
 |----------|---------|-------------|

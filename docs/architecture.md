@@ -16,7 +16,7 @@ flowchart LR
         Bridge["whatsapp-bridge<br/>Go, whatsmeow<br/>:8180"]
         Store[("store/<br/>messages.db<br/>whatsapp.db")]
         Indexer["indexer<br/>Python, background"]
-        IndexDB[("store-index/<br/>index.db")]
+        IndexDB[("index-data volume<br/>index.db")]
     end
 
     WA(["WhatsApp<br/>servers"])
@@ -60,7 +60,7 @@ See [webhooks.md](webhooks.md).
 | `store/whatsapp.db` | whatsmeow | Device session, encryption keys, synced contacts. **Never edit it.** |
 | `store/<chat-jid>/` | Bridge | Downloaded media. |
 | `store/mcp_oauth.db` | MCP server | OAuth clients and token digests, only when `MCP_PUBLIC_URL` is set. See [mcp-oauth.md](mcp-oauth.md). |
-| `store-index/index.db` | Indexer | Search index: a plain-text copy of message text. See [search.md](search.md). |
+| `index.db` (`index-data` volume) | Indexer | Search index: a plain-text copy of message text. See [search.md](search.md). |
 
 Both databases use WAL mode so the MCP server can read while the bridge writes. Everything under `store/` is sensitive.
 

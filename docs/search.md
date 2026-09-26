@@ -4,12 +4,12 @@ Your message history becomes searchable on your machine, by exact words and by m
 indexer builds the index, and two MCP tools, `search_messages` and `index_status`, let your assistant use
 it. No message content ever leaves your machine: the indexer only reads the bridge's SQLite databases,
 the embedding model runs locally, and the index is a separate SQLite database
-(`store-index/index.db` in Docker).
+(the `index-data` volume in Docker).
 
 ## What it does
 
 ```
-store/messages.db  ──read-only──▶  indexer  ──writes──▶  store-index/index.db
+store/messages.db  ──read-only──▶  indexer  ──writes──▶  index-data volume: index.db
 store/whatsapp.db  ──read-only──▶     │                   - messages_idx  (resolved text, FTS5)
                                       │                   - chunks        (conversation windows)
                        local embedding model ────────────▶ - vec_chunks    (one vector per chunk)
@@ -147,7 +147,7 @@ All of these are optional; see [configuration.md](configuration.md) for the full
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `INDEX_DB_PATH` | `store/index.db` (`/app/index/index.db` in Docker, which is `./store-index/index.db` on the host) | Where the search index database is written. |
+| `INDEX_DB_PATH` | `store/index.db` (`/app/index/index.db` in Docker, stored in the `index-data` Docker volume) | Where the search index database is written. |
 | `INDEX_POLL_SECONDS` | `20` | How often the indexer checks for new messages once it is caught up. |
 | `CHUNK_GAP_MINUTES` | `30` | Silence, in minutes, that starts a new chunk. |
 | `CHUNK_MAX_MESSAGES` | `15` | Maximum messages per chunk before it splits. |
@@ -166,13 +166,12 @@ All of these are optional; see [configuration.md](configuration.md) for the full
 Docker Compose runs the indexer as its own service, alongside the bridge and MCP server:
 
 ```bash
-mkdir -p store-index                 # on Linux, so the container user can write to it
 docker compose up -d --build
 docker compose logs -f indexer
 ```
 
 The indexer mounts `store/` read-only (it must never be able to write to the bridge's databases) and keeps
-`index.db` in a separate, writable `store-index/` directory. The MCP server mounts `store-index/` too and
+`index.db` in a separate, writable Docker volume (`index-data`). The MCP server mounts that volume too and
 opens `index.db` read-only. The first start downloads the model and then embeds the whole history, so
 expect the semantic side to fill in gradually; `index_status` shows the progress.
 
@@ -186,7 +185,7 @@ uv run python -m search.indexer
 ## Sensitive data
 
 `index.db` holds a **plain-text copy of your message text** (plus resolved names) and vectors derived from
-it, so it is as sensitive as `store/messages.db`. It is git-ignored (`store-index/`); keep it under the same
+it, so it is as sensitive as `store/messages.db`. It lives in a Docker volume, outside the repository; keep it under the same
 disk encryption and never share it. Deleting it is safe: the indexer rebuilds it from `messages.db` on the
 next start.
 
