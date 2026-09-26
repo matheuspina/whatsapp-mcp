@@ -50,6 +50,12 @@ export default function PairingPage() {
   return (
     <PageContainer>
         <PageHeader title="Device Pairing" />
+        <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 p-3.5 text-xs text-foreground">
+          <span>💡 <strong>Múltiplos números disponíveis:</strong> Você pode conectar e gerenciar múltiplos aparelhos simultâneos.</span>
+          <a href="/instances" className="font-semibold text-primary underline ml-2 shrink-0">
+            Ir para Instâncias &rarr;
+          </a>
+        </div>
         {step === "phone" && <PhoneInput />}
         {step === "code" && <CodeDisplay />}
         {step === "dashboard" && <Dashboard onOpenSettings={() => setSettingsOpen(true)} />}

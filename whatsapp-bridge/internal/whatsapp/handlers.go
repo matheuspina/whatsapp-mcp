@@ -14,6 +14,7 @@ import (
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waCommon"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/proto/waHistorySync"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -122,11 +123,29 @@ func (c *Client) HandleMessage(messageStore *database.MessageStore, webhookManag
 	chatJID := msg.Info.Chat.String()
 	sender := msg.Info.Sender.User
 
+	// Check for message revocation (anti-delete audit)
+	if msg.Message != nil && msg.Message.ProtocolMessage != nil {
+		pm := msg.Message.ProtocolMessage
+		if pm.GetType() == waE2E.ProtocolMessage_REVOKE && pm.Key != nil && pm.Key.ID != nil {
+			revokedID := *pm.Key.ID
+			c.logger.Infof("Message revoked remotely: ID=%s in Chat=%s. Marking as deleted.", revokedID, chatJID)
+			if err := messageStore.MarkMessageRemoteDeleted(revokedID, chatJID); err != nil {
+				c.logger.Warnf("Failed to mark message %s as remotely deleted: %v", revokedID, err)
+			}
+			return
+		}
+	}
+
+	instanceJID := ""
+	if c.Store != nil && c.Store.ID != nil {
+		instanceJID = c.Store.ID.ToNonAD().String()
+	}
+
 	// Get appropriate chat name (pass nil for conversation since we don't have one for regular messages)
 	name := c.GetChatName(messageStore, msg.Info.Chat, chatJID, nil, sender)
 
-	// Update chat in database with the message timestamp (keeps last message time updated)
-	err := messageStore.StoreChat(chatJID, name, msg.Info.Timestamp)
+	// Update chat in database with the message timestamp and instance JID
+	err := messageStore.StoreChatWithInstance(chatJID, name, msg.Info.Timestamp, instanceJID)
 	if err != nil {
 		c.logger.Warnf("Failed to store chat: %v", err)
 	}
@@ -148,8 +167,8 @@ func (c *Client) HandleMessage(messageStore *database.MessageStore, webhookManag
 		senderName = sender // fallback to JID
 	}
 
-	// Store message in database
-	err = messageStore.StoreMessage(
+	// Store message in database tagged with instance
+	err = messageStore.StoreMessageWithInstance(
 		msg.Info.ID,
 		chatJID,
 		sender,
@@ -165,6 +184,8 @@ func (c *Client) HandleMessage(messageStore *database.MessageStore, webhookManag
 		fileSHA256,
 		fileEncSHA256,
 		fileLength,
+		instanceJID,
+		false,
 	)
 
 	if err != nil {
@@ -216,7 +237,13 @@ func (c *Client) HandleHistorySync(messageStore *database.MessageStore, historyS
 			if !ok {
 				continue
 			}
-			if err := messageStore.StoreChat(chatJID, name, timestamp); err != nil {
+
+			instanceJID := ""
+			if c.Store != nil && c.Store.ID != nil {
+				instanceJID = c.Store.ID.ToNonAD().String()
+			}
+
+			if err := messageStore.StoreChatWithInstance(chatJID, name, timestamp, instanceJID); err != nil {
 				c.logger.Warnf("Failed to store chat: %v", err)
 			}
 
@@ -266,7 +293,7 @@ func (c *Client) HandleHistorySync(messageStore *database.MessageStore, historyS
 
 				// For history sync, use sender as senderName fallback (PushName not directly available)
 				senderName := sender
-				err = messageStore.StoreMessageBulk(
+				err = messageStore.StoreMessageWithInstance(
 					msgID,
 					chatJID,
 					sender,
@@ -282,6 +309,8 @@ func (c *Client) HandleHistorySync(messageStore *database.MessageStore, historyS
 					fileSHA256,
 					fileEncSHA256,
 					fileLength,
+					instanceJID,
+					true,
 				)
 				if err != nil {
 					c.logger.Warnf("Failed to store history message: %v", err)

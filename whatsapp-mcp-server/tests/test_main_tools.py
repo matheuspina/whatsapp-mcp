@@ -20,21 +20,33 @@ DEFAULT_TOOLS = {
     "get_profile_picture",
 }
 
-ALL_TOOLS = DEFAULT_TOOLS | {
-    "manage_nickname",
-    "edit_message",
-    "delete_message",
-    "mark_read",
-    "manage_group",
-    "request_history",
-    "set_presence",
-    "subscribe_presence",
-    "get_blocklist",
-    "manage_blocklist",
-    "manage_newsletter",
-    "search_messages",
-    "index_status",
+ORGANIZATION_TOOLS = {
+    "list_departments",
+    "list_employees",
+    "resolve_employee",
+    "list_instances",
+    "get_audit_deleted_messages",
 }
+
+ALL_TOOLS = (
+    DEFAULT_TOOLS
+    | {
+        "manage_nickname",
+        "edit_message",
+        "delete_message",
+        "mark_read",
+        "manage_group",
+        "request_history",
+        "set_presence",
+        "subscribe_presence",
+        "get_blocklist",
+        "manage_blocklist",
+        "manage_newsletter",
+        "search_messages",
+        "index_status",
+    }
+    | ORGANIZATION_TOOLS
+)
 
 SEARCH_TOOLS = {"search_messages", "index_status"}
 

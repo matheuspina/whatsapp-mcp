@@ -14,8 +14,9 @@ import (
 // It exposes endpoints for sending messages, managing webhooks,
 // group operations, and other WhatsApp features.
 type Server struct {
-	client         *whatsapp.Client
-	messageStore   *database.MessageStore
+	client          *whatsapp.Client
+	instanceManager *whatsapp.InstanceManager
+	messageStore    *database.MessageStore
 	webhookManager *webhook.Manager
 	port           int
 	bindHost       string
@@ -44,6 +45,11 @@ func NewServer(client *whatsapp.Client, messageStore *database.MessageStore, web
 		webUIPassword:  webUIPassword,
 		loginLimiter:   newLoginLimiter(),
 	}
+}
+
+// SetInstanceManager configures the multi-instance manager.
+func (s *Server) SetInstanceManager(mgr *whatsapp.InstanceManager) {
+	s.instanceManager = mgr
 }
 
 // Start launches the HTTP server in a background goroutine.
@@ -138,4 +144,15 @@ func (s *Server) registerHandlers() {
 
 	// Sync status monitoring
 	http.HandleFunc("/api/sync-status", s.SecureMiddleware(s.handleSyncStatus))
+
+	// Organization management endpoints
+	http.HandleFunc("/api/departments", s.SecureMiddleware(s.handleDepartments))
+	http.HandleFunc("/api/departments/", s.SecureMiddleware(s.handleDepartmentByID))
+	http.HandleFunc("/api/employees", s.SecureMiddleware(s.handleEmployees))
+	http.HandleFunc("/api/employees/", s.SecureMiddleware(s.handleEmployeeByID))
+
+	// Multi-Instance management endpoints
+	http.HandleFunc("/api/instances", s.SecureMiddleware(s.handleInstances))
+	http.HandleFunc("/api/instances/", s.SecureMiddleware(s.handleInstanceByID))
+	http.HandleFunc("/api/instances/pair", s.SecureMiddleware(s.handleCreateInstancePair))
 }

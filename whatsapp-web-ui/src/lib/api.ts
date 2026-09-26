@@ -97,6 +97,69 @@ export interface WebhookLogsResponse {
   error?: string;
 }
 
+// Organization & Multi-Instance types
+export interface Department {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Employee {
+  id: number;
+  name: string;
+  role: string;
+  department_id?: number | null;
+  department_name?: string | null;
+  phone_number: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Instance {
+  jid: string;
+  phone_number: string;
+  alias: string;
+  employee_id?: number | null;
+  employee_name?: string | null;
+  status: "connected" | "disconnected" | "pairing" | "error";
+  is_active: boolean;
+  connected_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InstancePairResponse {
+  success: boolean;
+  temp_id?: string;
+  qr_code?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface ChatItem {
+  jid: string;
+  name?: string;
+  last_message_time: string;
+  is_group: boolean;
+  unread_count?: number;
+  instance_jid?: string;
+}
+
+export interface MessageItem {
+  id: string;
+  chat_jid: string;
+  sender: string;
+  sender_name?: string;
+  content: string;
+  timestamp: string;
+  is_from_me: boolean;
+  media_type?: string;
+  instance_jid?: string;
+  is_deleted_remote?: boolean;
+}
+
 // Fired when the bridge rejects a request because the session is missing or expired.
 export const UNAUTHORIZED_EVENT = "wa:unauthorized";
 
@@ -248,6 +311,104 @@ export class WhatsAppAPI {
   async getWebhookLogs(id: string): Promise<WebhookLog[]> {
     const response = await this.request<WebhookLogsResponse>(`/webhooks/${id}/logs`);
     return response.data || [];
+  }
+
+  // Organization methods
+  async getDepartments(): Promise<Department[]> {
+    const res = await this.request<{ success: boolean; departments?: Department[] }>("/departments");
+    return res.departments || [];
+  }
+
+  async createDepartment(data: { name: string; description?: string }): Promise<Department> {
+    const res = await this.request<{ success: boolean; department: Department }>("/departments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.department;
+  }
+
+  async updateDepartment(id: number, data: { name: string; description?: string }): Promise<Department> {
+    const res = await this.request<{ success: boolean; department: Department }>(`/departments/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return res.department;
+  }
+
+  async deleteDepartment(id: number): Promise<void> {
+    await this.request(`/departments/${id}`, { method: "DELETE" });
+  }
+
+  // Employee methods
+  async getEmployees(params?: { department_id?: number; q?: string }): Promise<Employee[]> {
+    let query = "";
+    if (params) {
+      const search = new URLSearchParams();
+      if (params.department_id) search.set("department_id", params.department_id.toString());
+      if (params.q) search.set("q", params.q);
+      const str = search.toString();
+      if (str) query = `?${str}`;
+    }
+    const res = await this.request<{ success: boolean; employees?: Employee[] }>(`/employees${query}`);
+    return res.employees || [];
+  }
+
+  async createEmployee(data: { name: string; role?: string; department_id?: number | null; phone_number?: string }): Promise<Employee> {
+    const res = await this.request<{ success: boolean; employee: Employee }>("/employees", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return res.employee;
+  }
+
+  async updateEmployee(id: number, data: { name?: string; role?: string; department_id?: number | null; phone_number?: string }): Promise<Employee> {
+    const res = await this.request<{ success: boolean; employee: Employee }>(`/employees/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return res.employee;
+  }
+
+  async deleteEmployee(id: number): Promise<void> {
+    await this.request(`/employees/${id}`, { method: "DELETE" });
+  }
+
+  // Multi-Instance methods
+  async getInstances(): Promise<Instance[]> {
+    const res = await this.request<{ success: boolean; instances?: Instance[] }>("/instances");
+    return res.instances || [];
+  }
+
+  async createInstancePair(alias: string, employeeId?: number | null): Promise<InstancePairResponse> {
+    return this.request<InstancePairResponse>("/instances/pair", {
+      method: "POST",
+      body: JSON.stringify({ alias, employee_id: employeeId }),
+    });
+  }
+
+  async reconnectInstance(jid: string): Promise<void> {
+    await this.request(`/instances/${encodeURIComponent(jid)}/reconnect`, { method: "POST" });
+  }
+
+  async disconnectInstance(jid: string): Promise<void> {
+    await this.request(`/instances/${encodeURIComponent(jid)}/disconnect`, { method: "POST" });
+  }
+
+  async deleteInstance(jid: string): Promise<void> {
+    await this.request(`/instances/${encodeURIComponent(jid)}`, { method: "DELETE" });
+  }
+
+  // Chats and Messages
+  async getChats(): Promise<ChatItem[]> {
+    const res = await this.request<{ success: boolean; chats?: ChatItem[] }>("/chats");
+    return res.chats || [];
+  }
+
+  async getMessages(chatJid: string, limit = 100): Promise<MessageItem[]> {
+    const res = await this.request<{ success: boolean; messages?: MessageItem[] }>(
+      `/messages?chat_jid=${encodeURIComponent(chatJid)}&limit=${limit}`
+    );
+    return res.messages || [];
   }
 }
 

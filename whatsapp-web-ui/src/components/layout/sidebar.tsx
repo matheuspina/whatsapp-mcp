@@ -4,14 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  Building2,
   ChevronsUpDown,
   LayoutDashboard,
-  Link2,
   LogOut,
   MessageSquare,
   Plug,
   Settings,
+  Smartphone,
   User,
+  Users,
   Webhook,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,32 +41,78 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const navItems = [
+interface NavItem {
+  title: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
   {
-    title: "Overview",
-    href: "/",
-    icon: LayoutDashboard,
-    description: "System overview",
+    label: "Operação & Auditoria",
+    items: [
+      {
+        title: "Visão Geral",
+        href: "/",
+        icon: LayoutDashboard,
+        description: "Métricas gerais do sistema",
+      },
+      {
+        title: "Mensagens & Auditoria",
+        href: "/messages",
+        icon: MessageSquare,
+        description: "Feed centralizado e anti-delete",
+      },
+    ],
   },
   {
-    title: "Pairing",
-    href: "/pairing",
-    icon: Link2,
-    description: "Link WhatsApp device",
+    label: "Organização",
+    items: [
+      {
+        title: "Setores",
+        href: "/departments",
+        icon: Building2,
+        description: "Departamentos da empresa",
+      },
+      {
+        title: "Colaboradores",
+        href: "/employees",
+        icon: Users,
+        description: "Equipe e vinculações",
+      },
+    ],
   },
   {
-    title: "Webhooks",
-    href: "/webhooks",
-    icon: Webhook,
-    description: "Manage webhook endpoints",
-  },
-  {
-    title: "MCP Clients",
-    href: "/mcp-clients",
-    icon: Plug,
-    description: "Connect AI clients",
+    label: "Conexões & IA",
+    items: [
+      {
+        title: "Instâncias WhatsApp",
+        href: "/instances",
+        icon: Smartphone,
+        description: "Dispositivos conectados",
+      },
+      {
+        title: "Webhooks",
+        href: "/webhooks",
+        icon: Webhook,
+        description: "Endpoints de disparo",
+      },
+      {
+        title: "Clientes MCP",
+        href: "/mcp-clients",
+        icon: Plug,
+        description: "Integração com Claude, Cursor, etc.",
+      },
+    ],
   },
 ];
+
 
 type ConnectionDotStatus = "connected" | "disconnected" | "unknown";
 
@@ -146,29 +194,31 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => {
-                const isActive =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : pathname === item.href || pathname.startsWith(item.href + "/");
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                      <Link href={item.href}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {navGroups.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  const isActive =
+                    item.href === "/"
+                      ? pathname === "/"
+                      : pathname === item.href || pathname.startsWith(item.href + "/");
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                        <Link href={item.href}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       <SidebarFooter>

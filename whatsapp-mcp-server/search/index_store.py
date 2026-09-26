@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS messages_idx (
     from_me INTEGER NOT NULL DEFAULT 0,
     text TEXT,
     chunk_id TEXT,
+    instance_jid TEXT,
+    is_deleted_remote INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (chat_jid, message_id)
 );
 
@@ -101,6 +103,8 @@ class IndexedMessage:
     sender_name: str
     from_me: bool
     text: str
+    instance_jid: str | None = None
+    is_deleted_remote: bool = False
 
 
 @dataclass(frozen=True)
@@ -176,6 +180,11 @@ class IndexStore:
 
     def _init_schema(self) -> None:
         self._conn.executescript(_SCHEMA_SQL)
+        for col in ("instance_jid TEXT", "is_deleted_remote INTEGER DEFAULT 0"):
+            try:
+                self._conn.execute(f"ALTER TABLE messages_idx ADD COLUMN {col}")
+            except sqlite3.OperationalError:
+                pass
         if self.get_meta("schema_version") is None:
             self.set_meta("schema_version", SCHEMA_VERSION)
         self._conn.commit()
@@ -213,16 +222,31 @@ class IndexStore:
             return
         self._conn.executemany(
             """
-            INSERT INTO messages_idx (message_id, chat_jid, ts, sender_jid, sender_name, from_me, text)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO messages_idx (message_id, chat_jid, ts, sender_jid, sender_name, from_me, text, instance_jid, is_deleted_remote)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(chat_jid, message_id) DO UPDATE SET
                 ts = excluded.ts,
                 sender_jid = excluded.sender_jid,
                 sender_name = excluded.sender_name,
                 from_me = excluded.from_me,
-                text = excluded.text
+                text = excluded.text,
+                instance_jid = excluded.instance_jid,
+                is_deleted_remote = excluded.is_deleted_remote
             """,
-            [(r.message_id, r.chat_jid, r.ts, r.sender_jid, r.sender_name, int(r.from_me), r.text) for r in rows],
+            [
+                (
+                    r.message_id,
+                    r.chat_jid,
+                    r.ts,
+                    r.sender_jid,
+                    r.sender_name,
+                    int(r.from_me),
+                    r.text,
+                    r.instance_jid,
+                    int(r.is_deleted_remote),
+                )
+                for r in rows
+            ],
         )
         self._conn.commit()
 

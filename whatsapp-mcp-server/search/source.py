@@ -34,6 +34,8 @@ class RawMessage:
     is_from_me: bool
     media_type: str | None
     filename: str | None
+    instance_jid: str | None = None
+    is_deleted_remote: bool = False
 
 
 def _connect_readonly(db_path: str) -> sqlite3.Connection:
@@ -77,9 +79,15 @@ def fetch_messages_after(messages_db_path: str, cursor: int, limit: int = DEFAUL
     """
     conn = _connect_readonly(messages_db_path)
     try:
+        col_names = {r[1] for r in conn.execute("PRAGMA table_info(messages)").fetchall()}
+        cols = ["rowid", "id", "chat_jid", "sender", "content", "timestamp", "is_from_me", "media_type", "filename"]
+        cols.append("instance_jid" if "instance_jid" in col_names else "NULL AS instance_jid")
+        cols.append("is_deleted_remote" if "is_deleted_remote" in col_names else "0 AS is_deleted_remote")
+        col_str = ", ".join(cols)
+
         rows = conn.execute(
-            """
-            SELECT rowid, id, chat_jid, sender, content, timestamp, is_from_me, media_type, filename
+            f"""
+            SELECT {col_str}
             FROM messages
             WHERE rowid > ?
             ORDER BY rowid ASC
@@ -100,6 +108,8 @@ def fetch_messages_after(messages_db_path: str, cursor: int, limit: int = DEFAUL
             is_from_me=bool(row[6]),
             media_type=row[7],
             filename=row[8],
+            instance_jid=row[9],
+            is_deleted_remote=bool(row[10]),
         )
         for row in rows
     ]

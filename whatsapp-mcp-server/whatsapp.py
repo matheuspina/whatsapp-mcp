@@ -2491,3 +2491,39 @@ def archive_chat(chat_jid: str, archive: bool = True) -> dict[str, Any]:
             return {"success": False, "chat_jid": chat_jid, "error": f"HTTP {response.status_code} - {response.text}"}
     except requests.RequestException as e:
         return {"success": False, "chat_jid": chat_jid, "error": f"Request error: {str(e)}"}
+
+
+def list_departments() -> list[dict[str, Any]]:
+    """List all organizational departments (e.g. Sales, Support, Operations)."""
+    from lib.database import list_departments as _list_departments
+
+    return _list_departments()
+
+
+def list_employees(department_id: int | None = None, query: str | None = None) -> list[dict[str, Any]]:
+    """List all employees/team members, optionally filtered by department or name."""
+    from lib.database import list_employees as _list_employees
+
+    return _list_employees(department_id=department_id, query=query)
+
+
+def resolve_employee(name_or_query: str) -> dict[str, Any]:
+    """Resolve an employee by name or role to assist AI in finding team members."""
+    from lib.database import resolve_employee as _resolve_employee
+
+    return _resolve_employee(name_or_query)
+
+
+def list_instances() -> list[dict[str, Any]]:
+    """List all connected WhatsApp instances and their linked employees and departments."""
+    from lib.database import list_instances as _list_instances
+
+    return _list_instances()
+
+
+def get_audit_deleted_messages(chat_jid: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    """Retrieve audit records of messages that were remotely deleted on WhatsApp."""
+    from lib.database import get_audit_deleted_messages as _get_audit_deleted_messages
+
+    return _get_audit_deleted_messages(chat_jid=chat_jid, limit=limit)
+

@@ -72,6 +72,8 @@ def run_once(
             sender_name=sender_name,
             from_me=raw.is_from_me,
             text=text,
+            instance_jid=raw.instance_jid,
+            is_deleted_remote=raw.is_deleted_remote,
         )
         by_chat.setdefault(raw.chat_jid, []).append(indexed)
 

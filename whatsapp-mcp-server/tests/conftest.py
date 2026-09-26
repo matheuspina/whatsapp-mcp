@@ -52,7 +52,47 @@ def temp_messages_db():
             forwarded_from TEXT,
             is_system_message INTEGER DEFAULT 0,
             system_message_type TEXT,
+            instance_jid TEXT,
+            is_deleted_remote INTEGER DEFAULT 0,
             FOREIGN KEY (chat_jid) REFERENCES chats(jid)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE departments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE employees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            role TEXT,
+            department_id INTEGER,
+            phone_number TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE instances (
+            jid TEXT PRIMARY KEY,
+            phone_number TEXT,
+            alias TEXT,
+            employee_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'disconnected',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            connected_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
         )
     """)
 

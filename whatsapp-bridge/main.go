@@ -127,12 +127,13 @@ func main() {
 	}
 	defer messageStore.Close()
 
-	// Create WhatsApp client with config (Phase 4: HistorySyncConfig)
-	client, err := whatsapp.NewClientWithConfig(logger, cfg)
+	// Initialize WhatsApp InstanceManager (manages pool of multi-device WhatsApp accounts)
+	instanceManager, err := whatsapp.NewInstanceManager(logger, cfg, messageStore)
 	if err != nil {
-		logger.Errorf("Failed to create WhatsApp client: %v", err)
+		logger.Errorf("Failed to initialize instance manager: %v", err)
 		os.Exit(1)
 	}
+	client := instanceManager.GetDefaultClient()
 
 	// Initialize webhook manager
 	webhookManager := webhook.NewManager(messageStore, logger)
@@ -148,29 +149,31 @@ func main() {
 		fireConnectionEvent(webhookManager, client, "circuit_breaker_exhausted", "30 consecutive reconnect failures")
 	})
 
-	// Setup event handling for messages and history sync
-	client.AddEventHandler(func(evt interface{}) {
+	// Setup global event handling across all current and future instances
+	instanceManager.AddGlobalEventHandler(func(c *whatsapp.Client, evt interface{}) {
 		switch v := evt.(type) {
 		case *events.Message:
-			// Process regular messages with webhook support
-			client.HandleMessage(messageStore, webhookManager, v)
+			// Process regular messages with webhook support and instance tagging
+			c.HandleMessage(messageStore, webhookManager, v)
 
 		case *events.HistorySync:
 			// Process history sync events with detailed logging
 			logger.Infof("[SYNC] Starting HistorySync (Type: %v, Conversations: %d)", v.Data.SyncType, len(v.Data.Conversations))
-			client.HandleHistorySync(messageStore, v)
+			c.HandleHistorySync(messageStore, v)
 			logger.Infof("[SYNC] ✓ Completed (Type: %v, %d conversations)", v.Data.SyncType, len(v.Data.Conversations))
 
 		case *events.Connected:
-			_, _, discAt, _ := client.ConnectionState()
-			client.MarkConnected()
-			client.Antiban().RecordEvent(antiban.EventConnected)
-			// Human flow: stay offline by default. Being permanently "available"
-			// is a bot tell. The presence manager goes online only around real
-			// outgoing activity and drops back to unavailable afterwards.
-			client.ApplyConnectedPresence()
-			logger.Infof("✓ Connected to WhatsApp")
-			go fireConnectionEvent(webhookManager, client, "connected", "")
+			_, _, discAt, _ := c.ConnectionState()
+			c.MarkConnected()
+			c.Antiban().RecordEvent(antiban.EventConnected)
+			c.ApplyConnectedPresence()
+			logger.Infof("✓ Instance Connected: %v", c.Store.ID)
+			if c.Store.ID != nil {
+				jidStr := c.Store.ID.ToNonAD().String()
+				now := time.Now()
+				_ = messageStore.UpdateInstanceStatus(jidStr, "connected", nil, &now)
+			}
+			go fireConnectionEvent(webhookManager, c, "connected", "")
 
 			// If we were disconnected for >30s, attempt best-effort history backfill
 			// for recently active chats to recover any messages missed during the gap.
@@ -447,17 +450,21 @@ func main() {
 		logger.Warnf("Web UI login disabled: set WEB_UI_USERNAME and WEB_UI_PASSWORD to enable it")
 	}
 	server := api.NewServer(client, messageStore, webhookManager, cfg.APIPort, cfg.APIBindHost, sessions, cfg.WebUIUsername, cfg.WebUIPassword)
+	server.SetInstanceManager(instanceManager)
 	server.Start()
 	fmt.Println("✓ REST API server started on port " + fmt.Sprintf("%d", cfg.APIPort))
 
-	// Connect to WhatsApp in background (non-blocking so server can start)
-	go func() {
-		if err := client.Connect(); err != nil {
-			logger.Errorf("Failed to connect to WhatsApp: %v", err)
-		} else {
-			fmt.Println("\n✓ Connected to WhatsApp!")
-		}
-	}()
+	// Connect all initialized WhatsApp devices in background (non-blocking so server can start)
+	for _, instClient := range instanceManager.ListClients() {
+		c := instClient
+		go func() {
+			if err := c.Connect(); err != nil {
+				logger.Errorf("Failed to connect instance: %v", err)
+			} else {
+				fmt.Println("\n✓ Connected to WhatsApp!")
+			}
+		}()
+	}
 
 	// Create a channel to keep the main goroutine alive
 	exitChan := make(chan os.Signal, 1)
@@ -483,11 +490,11 @@ func main() {
 	// Wait for termination signal
 	<-exitChan
 
-	fmt.Println("Disconnecting...")
-	// Flush antiban state before disconnect
-	if err := client.Antiban().Close(); err != nil {
-		logger.Warnf("Antiban close error: %v", err)
+	fmt.Println("Disconnecting all instances...")
+	for _, c := range instanceManager.ListClients() {
+		if err := c.Antiban().Close(); err != nil {
+			logger.Warnf("Antiban close error: %v", err)
+		}
+		c.Disconnect()
 	}
-	// Disconnect client
-	client.Disconnect()
 }

@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
 
-from .models import Chat, Contact, Message, MessageContext
+from .models import Chat, Contact, Department, Employee, Instance, Message, MessageContext
 from .utils import MESSAGES_DB_PATH, WHATSAPP_DB_PATH, get_sender_name, logger
 
 
@@ -913,3 +913,229 @@ def search_contacts(query: str) -> list[dict[str, Any]]:
             whatsapp_conn.close()
         if "messages_conn" in locals():
             messages_conn.close()
+
+
+def list_departments() -> list[dict[str, Any]]:
+    """List all organizational departments.
+
+    Returns:
+        List of department dictionaries.
+    """
+    try:
+        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, description, created_at, updated_at FROM departments ORDER BY name ASC")
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            Department(
+                id=r[0],
+                name=r[1],
+                description=r[2],
+                created_at=r[3],
+                updated_at=r[4],
+            ).to_dict()
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        # Table might not exist yet in unmigrated or mock tests
+        return []
+    except Exception as e:
+        logger.error("Error listing departments: %s", e)
+        raise DatabaseError(f"Failed to list departments: {e}") from e
+
+
+def list_employees(department_id: int | None = None, query: str | None = None) -> list[dict[str, Any]]:
+    """List employees, optionally filtered by department or search query.
+
+    Args:
+        department_id: Optional department ID to filter by.
+        query: Optional name or role query.
+
+    Returns:
+        List of employee dictionaries.
+    """
+    try:
+        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
+        cursor = conn.cursor()
+        sql = """
+            SELECT e.id, e.name, e.role, e.department_id, d.name AS department_name, e.phone_number, e.created_at, e.updated_at
+            FROM employees e
+            LEFT JOIN departments d ON e.department_id = d.id
+        """
+        clauses = []
+        params = []
+        if department_id is not None:
+            clauses.append("e.department_id = ?")
+            params.append(department_id)
+        if query:
+            clauses.append("(LOWER(e.name) LIKE LOWER(?) OR LOWER(e.role) LIKE LOWER(?))")
+            params.extend([f"%{query}%", f"%{query}%"])
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY e.name ASC"
+
+        cursor.execute(sql, tuple(params))
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            Employee(
+                id=r[0],
+                name=r[1],
+                role=r[2],
+                department_id=r[3],
+                department_name=r[4],
+                phone_number=r[5],
+                created_at=r[6],
+                updated_at=r[7],
+            ).to_dict()
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+    except Exception as e:
+        logger.error("Error listing employees: %s", e)
+        raise DatabaseError(f"Failed to list employees: {e}") from e
+
+
+def resolve_employee(name_or_query: str) -> dict[str, Any]:
+    """Resolve an employee by name or role to assist AI in finding team members.
+
+    Args:
+        name_or_query: Name or role search string.
+
+    Returns:
+        Dict with search results and matched employees.
+    """
+    try:
+        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
+        cursor = conn.cursor()
+        sql = """
+            SELECT e.id, e.name, e.role, e.department_id, d.name AS department_name, e.phone_number
+            FROM employees e
+            LEFT JOIN departments d ON e.department_id = d.id
+            WHERE LOWER(e.name) LIKE LOWER(?) OR LOWER(e.role) LIKE LOWER(?)
+            ORDER BY CASE WHEN LOWER(e.name) = LOWER(?) THEN 0 ELSE 1 END, e.name ASC
+            LIMIT 5
+        """
+        p = f"%{name_or_query}%"
+        cursor.execute(sql, (p, p, name_or_query))
+        rows = cursor.fetchall()
+        conn.close()
+
+        employees = [
+            {
+                "id": r[0],
+                "name": r[1],
+                "role": r[2],
+                "department_id": r[3],
+                "department_name": r[4],
+                "phone_number": r[5],
+            }
+            for r in rows
+        ]
+        return {
+            "query": name_or_query,
+            "found": len(employees) > 0,
+            "employees": employees,
+        }
+    except sqlite3.OperationalError:
+        return {"query": name_or_query, "found": False, "employees": []}
+    except Exception as e:
+        logger.error("Error resolving employee: %s", e)
+        raise DatabaseError(f"Failed to resolve employee: {e}") from e
+
+
+def list_instances() -> list[dict[str, Any]]:
+    """List all connected WhatsApp instances and their linked employees.
+
+    Returns:
+        List of instance dictionaries.
+    """
+    try:
+        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
+        cursor = conn.cursor()
+        sql = """
+            SELECT i.jid, i.phone_number, i.alias, i.employee_id, e.name AS employee_name, d.name AS department_name,
+                   i.status, i.is_active, i.connected_at, i.created_at, i.updated_at
+            FROM instances i
+            LEFT JOIN employees e ON i.employee_id = e.id
+            LEFT JOIN departments d ON e.department_id = d.id
+            ORDER BY i.created_at DESC
+        """
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            Instance(
+                jid=r[0],
+                phone_number=r[1],
+                alias=r[2],
+                employee_id=r[3],
+                employee_name=r[4],
+                department_name=r[5],
+                status=r[6] or "disconnected",
+                is_active=bool(r[7]),
+                connected_at=r[8],
+                created_at=r[9],
+                updated_at=r[10],
+            ).to_dict()
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+    except Exception as e:
+        logger.error("Error listing instances: %s", e)
+        raise DatabaseError(f"Failed to list instances: {e}") from e
+
+
+def get_audit_deleted_messages(chat_jid: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    """Get audit logs of messages that were remotely deleted on WhatsApp.
+
+    Args:
+        chat_jid: Optional chat JID to filter by.
+        limit: Max number of messages to return.
+
+    Returns:
+        List of deleted message audit records.
+    """
+    try:
+        conn = sqlite3.connect(f"file:{MESSAGES_DB_PATH}?mode=ro", uri=True)
+        cursor = conn.cursor()
+        sql = """
+            SELECT m.id, m.chat_jid, c.name AS chat_name, m.sender, m.content, m.timestamp,
+                   m.is_from_me, m.instance_jid, m.is_deleted_remote
+            FROM messages m
+            LEFT JOIN chats c ON m.chat_jid = c.jid
+            WHERE m.is_deleted_remote = 1
+        """
+        params = []
+        if chat_jid:
+            sql += " AND m.chat_jid = ?"
+            params.append(chat_jid)
+        sql += " ORDER BY m.timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        cursor.execute(sql, tuple(params))
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                "id": r[0],
+                "chat_jid": r[1],
+                "chat_name": r[2],
+                "sender": r[3],
+                "content": r[4],
+                "timestamp": r[5],
+                "is_from_me": bool(r[6]),
+                "instance_jid": r[7],
+                "is_deleted_remote": bool(r[8]),
+            }
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+    except Exception as e:
+        logger.error("Error retrieving deleted messages audit: %s", e)
+        raise DatabaseError(f"Failed to retrieve deleted messages audit: {e}") from e
+

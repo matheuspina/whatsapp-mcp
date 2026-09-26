@@ -43,6 +43,8 @@ class Message:
     has_reactions: bool = False
     is_group: bool = False
     is_read: bool = False
+    instance_jid: str | None = None
+    is_deleted_remote: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert Message to dictionary for structured output, omitting empty/null fields."""
@@ -107,8 +109,91 @@ class Message:
             result["has_reactions"] = self.has_reactions
         if self.is_read:
             result["is_read"] = self.is_read
+        if self.instance_jid:
+            result["instance_jid"] = self.instance_jid
+        if self.is_deleted_remote:
+            result["is_deleted_remote"] = self.is_deleted_remote
 
         return result
+
+
+@dataclass
+class Department:
+    """Represents an organizational department."""
+
+    id: int
+    name: str
+    description: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+
+@dataclass
+class Employee:
+    """Represents an employee/staff member."""
+
+    id: int
+    name: str
+    role: str | None = None
+    department_id: int | None = None
+    department_name: str | None = None
+    phone_number: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "role": self.role,
+            "department_id": self.department_id,
+            "department_name": self.department_name,
+            "phone_number": self.phone_number,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+
+@dataclass
+class Instance:
+    """Represents a connected WhatsApp instance/device."""
+
+    jid: str
+    phone_number: str | None = None
+    alias: str | None = None
+    employee_id: int | None = None
+    employee_name: str | None = None
+    department_name: str | None = None
+    status: str = "disconnected"
+    is_active: bool = False
+    connected_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "jid": self.jid,
+            "phone_number": self.phone_number,
+            "alias": self.alias,
+            "employee_id": self.employee_id,
+            "employee_name": self.employee_name,
+            "department_name": self.department_name,
+            "status": self.status,
+            "is_active": self.is_active,
+            "connected_at": self.connected_at,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
 
 
 @dataclass

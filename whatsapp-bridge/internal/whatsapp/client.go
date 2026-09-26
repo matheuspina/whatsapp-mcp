@@ -110,6 +110,11 @@ func NewClientWithConfig(logger waLog.Logger, cfg *config.Config) (*Client, erro
 		}
 	}
 
+	return NewClientForDevice(deviceStore, logger, cfg)
+}
+
+// NewClientForDevice creates a Client instance for a given device store.
+func NewClientForDevice(deviceStore *store.Device, logger waLog.Logger, cfg *config.Config) (*Client, error) {
 	// Create client instance
 	client := whatsmeow.NewClient(deviceStore, logger)
 	if client == nil {

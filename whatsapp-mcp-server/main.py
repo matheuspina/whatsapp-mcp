@@ -32,6 +32,7 @@ from whatsapp import demote_admin as whatsapp_demote_admin
 from whatsapp import download_media as whatsapp_download_media
 from whatsapp import edit_message as whatsapp_edit_message
 from whatsapp import follow_newsletter as whatsapp_follow_newsletter
+from whatsapp import get_audit_deleted_messages as whatsapp_get_audit_deleted_messages
 from whatsapp import get_blocklist as whatsapp_get_blocklist
 from whatsapp import get_chat as whatsapp_get_chat
 from whatsapp import get_contact_by_jid as whatsapp_get_contact_by_jid
@@ -47,11 +48,15 @@ from whatsapp import leave_group as whatsapp_leave_group
 from whatsapp import list_all_contacts as whatsapp_list_all_contacts
 from whatsapp import list_chats as whatsapp_list_chats
 from whatsapp import list_contact_nicknames as whatsapp_list_contact_nicknames
+from whatsapp import list_departments as whatsapp_list_departments
+from whatsapp import list_employees as whatsapp_list_employees
+from whatsapp import list_instances as whatsapp_list_instances
 from whatsapp import list_messages as whatsapp_list_messages
 from whatsapp import mark_messages_read as whatsapp_mark_messages_read
 from whatsapp import promote_to_admin as whatsapp_promote_to_admin
 from whatsapp import remove_contact_nickname as whatsapp_remove_contact_nickname
 from whatsapp import remove_group_members as whatsapp_remove_group_members
+from whatsapp import resolve_employee as whatsapp_resolve_employee
 
 # Phase 4: History Sync
 from whatsapp import request_chat_history as whatsapp_request_chat_history
@@ -91,6 +96,7 @@ ALL_TOOLSETS = {
     "account_admin",
     "newsletter",
     "search",
+    "organization",
 }
 DEFAULT_TOOLSETS = set(ALL_TOOLSETS)
 ENABLED_TOOLSETS = {
@@ -875,6 +881,37 @@ def manage_newsletter(
     if action == "follow":
         return whatsapp_follow_newsletter(jid)
     return whatsapp_unfollow_newsletter(jid)
+
+
+@tool("organization", "List Departments", read_only=True, idempotent=True, open_world=False)
+def list_departments() -> list[dict[str, Any]]:
+    """List all configured organizational departments (e.g. Sales, Support, Operations)."""
+    return whatsapp_list_departments()
+
+
+@tool("organization", "List Employees", read_only=True, idempotent=True, open_world=False)
+def list_employees(department_id: int | None = None, query: str | None = None) -> list[dict[str, Any]]:
+    """List all employees/team members, optionally filtered by department ID or name/role query."""
+    return whatsapp_list_employees(department_id=department_id, query=query)
+
+
+@tool("organization", "Resolve Employee", read_only=True, idempotent=True, open_world=False)
+def resolve_employee(query: str) -> dict[str, Any]:
+    """Resolve an employee by name or role to assist AI in finding team members and their associated department."""
+    return whatsapp_resolve_employee(query)
+
+
+@tool("organization", "List Instances", read_only=True, idempotent=True, open_world=False)
+def list_instances() -> list[dict[str, Any]]:
+    """List all connected WhatsApp multi-device instances and their linked employees and departments."""
+    return whatsapp_list_instances()
+
+
+@tool("organization", "Get Audit Deleted Messages", read_only=True, idempotent=True, open_world=False)
+def get_audit_deleted_messages(chat_jid: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    """Retrieve audit records of messages that were remotely deleted on WhatsApp (anti-delete audit trail)."""
+    return whatsapp_get_audit_deleted_messages(chat_jid=chat_jid, limit=limit)
+
 
 
 def _bridge_get(path: str) -> dict[str, Any]:
