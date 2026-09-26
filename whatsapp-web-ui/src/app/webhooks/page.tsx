@@ -16,8 +16,8 @@ export default function WebhooksPage() {
   }, [darkMode]);
 
   return (
-    <div className="p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="p-4 md:p-6">
+      <div>
         <WebhookList />
       </div>
     </div>

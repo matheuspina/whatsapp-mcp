@@ -24,11 +24,11 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-8">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="p-4 md:p-6">
+      <div className="max-w-3xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">Account, sessions and appearance</p>
+          <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground">Account, sessions and appearance</p>
         </div>
 
         <Card>

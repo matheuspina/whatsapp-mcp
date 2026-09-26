@@ -7,11 +7,11 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold">WhatsApp MCP</h1>
-        <p className="text-sm text-muted-foreground mb-2">by Matheus Pina</p>
-        <p className="text-muted-foreground mb-8">
+    <div className="p-4 md:p-6">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">WhatsApp MCP</h1>
+        <p className="text-sm text-muted-foreground">by Matheus Pina</p>
+        <p className="text-sm text-muted-foreground mb-6">
           Manage your WhatsApp bridge, device pairing, and webhook configurations
         </p>
 
@@ -20,7 +20,7 @@ export default function Home() {
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-500/10 rounded-lg">
-                  <Link2 className="h-6 w-6 text-green-500" />
+                  <Link2 className="h-5 w-5 text-green-500" />
                 </div>
                 <div>
                   <CardTitle>Device Pairing</CardTitle>
@@ -46,7 +46,7 @@ export default function Home() {
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-500/10 rounded-lg">
-                  <Webhook className="h-6 w-6 text-purple-500" />
+                  <Webhook className="h-5 w-5 text-purple-500" />
                 </div>
                 <div>
                   <CardTitle>Webhook Manager</CardTitle>

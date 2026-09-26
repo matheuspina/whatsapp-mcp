@@ -120,7 +120,7 @@ export function Sidebar({ ...props }: React.ComponentProps<typeof SidebarPrimiti
 
   return (
     <SidebarPrimitive collapsible="icon" {...props}>
-      <SidebarHeader>
+      <SidebarHeader className="h-14 justify-center border-b px-2 py-0">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild tooltip="WhatsApp MCP">

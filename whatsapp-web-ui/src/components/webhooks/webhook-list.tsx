@@ -128,8 +128,8 @@ export function WebhookList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Webhooks</h2>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl font-semibold tracking-tight">Webhooks</h1>
+          <p className="text-sm text-muted-foreground">
             Manage webhook endpoints for receiving WhatsApp messages
           </p>
         </div>
@@ -151,8 +151,8 @@ export function WebhookList() {
         </div>
       ) : webhooks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border rounded-lg bg-muted/30">
-          <WebhookIcon className="h-16 w-16 mb-4" />
-          <h3 className="text-lg font-medium mb-2">No webhooks configured</h3>
+          <WebhookIcon className="h-10 w-10 mb-4" />
+          <h3 className="text-base font-medium mb-2">No webhooks configured</h3>
           <p className="text-sm mb-4">Create your first webhook to start receiving messages</p>
           <Button onClick={handleCreate}>
             <Plus className="h-4 w-4 mr-2" />

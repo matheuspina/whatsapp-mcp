@@ -22,11 +22,11 @@ export default function McpPage() {
   const localUrl = url ? isLocalUrl(url) : true;
 
   return (
-    <div className="p-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <div className="p-4 md:p-6">
+      <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">MCP</h1>
-          <p className="text-muted-foreground">Connect an AI client to your WhatsApp account</p>
+          <h1 className="text-xl font-semibold tracking-tight">MCP</h1>
+          <p className="text-sm text-muted-foreground">Connect an AI client to your WhatsApp account</p>
         </div>
 
         <Card>

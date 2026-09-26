@@ -68,8 +68,8 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
   const hasReconnectErrors = (connStatus?.auto_reconnect_errors ?? 0) > 0;
 
   return (
-    <Card className="w-full max-w-lg mx-auto">
-      <CardHeader className="text-center">
+    <Card className="w-full max-w-lg">
+      <CardHeader>
         <CardTitle className="flex items-center justify-center gap-2">
           {isConnected ? (
             <>
@@ -138,7 +138,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
                 )}
                 <span className="text-sm font-medium">Sync Status</span>
               </div>
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-semibold">
                 {syncStatus?.syncing ? "Syncing" : "Synced"}
               </div>
               {syncStatus && (
@@ -153,7 +153,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Last Sync</span>
               </div>
-              <div className="text-lg font-medium">
+              <div className="text-sm font-medium">
                 {syncStatus?.last_sync
                   ? new Date(syncStatus.last_sync).toLocaleString()
                   : "In progress..."}
@@ -169,7 +169,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
                 <MessageSquare className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Messages</span>
               </div>
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-semibold">
                 {syncStatus?.message_count?.toLocaleString() || "0"}
               </div>
             </CardContent>
@@ -181,7 +181,7 @@ export function Dashboard({ onOpenSettings }: DashboardProps) {
                 <MessageSquare className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Chats</span>
               </div>
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-semibold">
                 {syncStatus?.conversation_count?.toLocaleString() || "0"}
               </div>
             </CardContent>

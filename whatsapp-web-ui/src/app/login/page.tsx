@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, LogIn, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,12 +34,28 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  const submitLogin = async () => {
+    if (loading) return;
+
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
+      setError("Please enter your username.");
+      usernameRef.current?.focus();
+      return;
+    }
+    if (!password) {
+      setError("Please enter your password.");
+      passwordRef.current?.focus();
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
-      const user = await new WhatsAppAPI().login(username, password);
+      const user = await new WhatsAppAPI().login(trimmedUsername, password);
       setPassword("");
       setAuthed(user.username);
       router.replace("/");
@@ -50,23 +66,43 @@ export default function LoginPage() {
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitLogin();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (!username.trim()) {
+        usernameRef.current?.focus();
+        return;
+      }
+      if (!password) {
+        passwordRef.current?.focus();
+        return;
+      }
+      submitLogin();
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <MessageSquare className="mx-auto mb-2 h-10 w-10 text-green-500" />
-          <CardTitle className="text-2xl">WhatsApp MCP</CardTitle>
+          <CardTitle className="text-xl">WhatsApp MCP</CardTitle>
           <CardDescription>by Matheus Pina</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
               <Input
+                ref={usernameRef}
                 id="username"
                 autoComplete="username"
                 autoFocus
-                required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -74,10 +110,10 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
+                ref={passwordRef}
                 id="password"
                 type="password"
                 autoComplete="current-password"
-                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />

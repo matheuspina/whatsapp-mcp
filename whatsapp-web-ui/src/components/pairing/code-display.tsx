@@ -86,15 +86,15 @@ export function CodeDisplay() {
   const StatusIcon = currentStatus.icon;
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader className="text-center">
+    <Card className="w-full max-w-md">
+      <CardHeader>
         <CardTitle>Enter This Code</CardTitle>
         <CardDescription>On your phones WhatsApp app</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="relative">
           <div
-            className="text-4xl font-mono font-bold text-center py-8 px-4 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 text-white tracking-widest cursor-pointer hover:opacity-90 transition-opacity"
+            className="text-3xl font-mono font-semibold text-center py-8 px-4 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 text-white tracking-widest cursor-pointer hover:opacity-90 transition-opacity"
             onClick={copyCode}
             title="Click to copy"
           >
@@ -110,7 +110,7 @@ export function CodeDisplay() {
           </Button>
         </div>
 
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-muted-foreground" />
           <span className={countdown <= 30 ? "text-destructive font-medium" : "text-muted-foreground"}>
             {countdown > 0 ? countdown + "s remaining" : "Expired"}

@@ -1,0 +1,51 @@
+services:
+  whatsapp-bridge:
+    develop:
+      watch:
+        - action: rebuild
+          path: ./whatsapp-bridge
+
+  whatsapp-mcp:
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./whatsapp-mcp-server
+          target: /app/whatsapp-mcp-server
+          ignore:
+            - "**/__pycache__"
+            - "**/*.pyc"
+            - "**/.pytest_cache"
+            - "**/.ruff_cache"
+        - action: rebuild
+          path: ./whatsapp-mcp-server/requirements.txt
+
+  indexer:
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./whatsapp-mcp-server
+          target: /app/whatsapp-mcp-server
+          ignore:
+            - "**/__pycache__"
+            - "**/*.pyc"
+            - "**/.pytest_cache"
+            - "**/.ruff_cache"
+
+  web-ui:
+    build:
+      target: dev
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    develop:
+      watch:
+        - action: sync
+          path: ./whatsapp-web-ui
+          target: /app
+          ignore:
+            - node_modules/
+            - .next/
+        - action: rebuild
+          path: ./whatsapp-web-ui/package.json
