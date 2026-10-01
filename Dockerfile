@@ -19,7 +19,7 @@ RUN go build -trimpath -o /out/whatsapp-bridge .
 # --- Web panel: static export. The API base is /api because nginx serves the panel and the bridge on one origin. ---
 # Runs on the build machine's own architecture: the output is static files, identical for every platform, and
 # next build (Turbopack) crashes under QEMU emulation.
-FROM --platform=$BUILDPLATFORM node:20-alpine AS web-builder
+FROM --platform=$BUILDPLATFORM node:26-alpine AS web-builder
 WORKDIR /app
 COPY whatsapp-web-ui/package*.json ./
 RUN npm ci

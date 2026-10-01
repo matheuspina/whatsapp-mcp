@@ -1,5 +1,5 @@
 # Development stage (used for docker compose watch / local dev with hot reload)
-FROM node:20-alpine AS dev
+FROM node:26-alpine AS dev
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ ENV HOSTNAME="0.0.0.0"
 CMD ["npm", "run", "dev", "--", "-p", "8080", "-H", "0.0.0.0"]
 
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 
