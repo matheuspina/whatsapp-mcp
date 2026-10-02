@@ -16,7 +16,7 @@ dependencies = [
     "h11>=0.16.0",
     "fastembed>=0.8.1,<0.9",
     "sqlite-vec==0.1.9",
-    "tzdata>=2025.2",
+    "tzdata>=2026.4",
 ]
 
 [project.optional-dependencies]
