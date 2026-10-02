@@ -11,6 +11,6 @@ h11>=0.16.0
 # Local search: ONNX embeddings and the SQLite vector extension (pre-1.0, so pinned exactly).
 fastembed>=0.8.1,<0.9
 sqlite-vec==0.1.9
-tzdata>=2025.2
+tzdata>=2026.4
 gradio==6.15.1
 gradio_client==1.10.3
