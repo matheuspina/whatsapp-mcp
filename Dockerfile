@@ -28,7 +28,7 @@ ENV NEXT_PUBLIC_API_BASE_URL=/api
 RUN npm run build
 
 # --- MCP server dependencies in an isolated venv (build tools stay out of the final image) ---
-FROM python:3.13-slim-bookworm AS mcp-builder
+FROM python:3.15-slim-bookworm AS mcp-builder
 WORKDIR /app
 COPY whatsapp-mcp-server/requirements.txt .
 # gradio/gradio_client are only used by gradio-main.py (local dev UI), not by main.py.
@@ -38,7 +38,7 @@ RUN grep -vE "^gradio" requirements.txt > requirements-docker.txt \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements-docker.txt
 
 # --- Runtime ---
-FROM python:3.13-slim-bookworm AS runtime
+FROM python:3.15-slim-bookworm AS runtime
 
 # gosu drops root after fixing volume ownership, tini reaps children and forwards signals, wget is for HEALTHCHECK
 RUN apt-get update && apt-get install -y --no-install-recommends \
