@@ -8,7 +8,7 @@
 #                             /mcp ...  MCP server + OAuth   -> 127.0.0.1:8081 (only when MCP_PUBLIC_URL is set)
 
 # --- Go bridge. Built on bookworm so the binary runs on the bookworm runtime below (same glibc). ---
-FROM golang:1.25-bookworm AS bridge-builder
+FROM golang:1.27-bookworm AS bridge-builder
 ENV CGO_ENABLED=1
 WORKDIR /src
 COPY whatsapp-bridge/go.mod whatsapp-bridge/go.sum ./
@@ -19,7 +19,7 @@ RUN go build -trimpath -o /out/whatsapp-bridge .
 # --- Web panel: static export. The API base is /api because nginx serves the panel and the bridge on one origin. ---
 # Runs on the build machine's own architecture: the output is static files, identical for every platform, and
 # next build (Turbopack) crashes under QEMU emulation.
-FROM --platform=$BUILDPLATFORM node:20-alpine AS web-builder
+FROM --platform=$BUILDPLATFORM node:26-alpine AS web-builder
 WORKDIR /app
 COPY whatsapp-web-ui/package*.json ./
 RUN npm ci

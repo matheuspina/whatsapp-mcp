@@ -38,7 +38,7 @@ jobs:
           uv run pytest --cov=lib --cov-report=xml --cov-report=term-missing -v
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           file: whatsapp-mcp-server/coverage.xml
           flags: python
