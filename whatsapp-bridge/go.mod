@@ -3,7 +3,7 @@ module whatsapp-bridge
 go 1.26.0
 
 require (
-	github.com/mattn/go-sqlite3 v1.14.48
+	github.com/mattn/go-sqlite3 v1.14.53
 	github.com/mdp/qrterminal v1.0.1
 	github.com/minio/minio-go/v7 v7.4.1
 	go.mau.fi/whatsmeow v0.0.0-20260722203353-e9a033b24933
