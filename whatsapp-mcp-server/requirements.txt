@@ -4,7 +4,7 @@ httpx>=0.28.1
 # with ModuleNotFoundError.
 mcp[cli]>=2.2.0,<3.0.0
 requests>=2.32.3
-starlette>=1.3.1
+starlette>=1.10.0
 uvicorn>=0.23.2
 urllib3>=2.8.0
 h11>=0.16.0
